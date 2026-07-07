@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+ENV/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Runtime state produced by seeded target repos (never commit into this source repo)
+.worktrees/
+*.local.json
+
+# Local challenge/review working artifacts — kept out of the public repo
+reviews/
+
+# Secrets — never commit (belt-and-suspenders; the harness also blocks these at commit time)
+.env
+.env.*
+*.key
+*.pem

@@ -1,0 +1,9 @@
+{
+  "name": "domino-autodrive",
+  "description": "Enforcement layer for autonomous AI coding: tool-layer scope guard, git-committed resumable ledger, converging adversarial challenge gate, and commit-to-requirement traceability. Ships the /domino, /autodrive, /orchestrate, /challenge, and /spec/* commands.",
+  "version": "0.1.0",
+  "author": { "name": "Márton Fenyvesi" },
+  "homepage": "https://github.com/marcifenyvesi/domino-autodrive",
+  "repository": "https://github.com/marcifenyvesi/domino-autodrive",
+  "license": "MIT"
+}

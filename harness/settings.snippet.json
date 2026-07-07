@@ -1,0 +1,36 @@
+{
+  "_comment": "Merge this into the TARGET repo's .claude/settings.json. /autodrive init copies harness/hooks/ to <repo>/.claude/harness/hooks/ and wires these two load-bearing hooks. $CLAUDE_PROJECT_DIR resolves to the target repo root. Hooks use python3.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/harness/hooks/scope_guard.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/harness/hooks/ledger_commit.py\""
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/harness/hooks/ledger_commit.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
