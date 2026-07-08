@@ -149,7 +149,7 @@ The plugin installs the slash commands; the Python engine is seeded per-project 
 harness/
   autodrive/    engine.py, parallel.py, lease.py, merge.py, claims.py, init.py, audit.py
   hooks/        scope_guard.py, precommit_scope.py, ledger_commit.py, ledger.py, scope_algebra.py
-  schema/       ledger.md (grammar + JSON schema), harness-yaml.md (per-repo overrides)
+  schema/       ledger.md, harness-yaml.md, task.md, batch.md — artifact contracts
   audit/        playwright-gate.md (webapp UI audit gate)
   STANDARDS.md  coding rules (NASA P10, anti-slop) + §7 UI/UX + §8 security minimums
 commands/

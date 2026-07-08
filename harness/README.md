@@ -16,6 +16,8 @@ docs, ledger, and code get produced.
 | `hooks/ledger_commit.py` | **Stop / SessionEnd** hook — commits the two ledger files so a kill leaves a consistent resume anchor. |
 | `schema/ledger.md` | `LEDGER.md` grammar + `LEDGER.state.json` JSON schema + resume reconciliation table. |
 | `schema/harness-yaml.md` | `.harness.yaml` per-repo override schema. |
+| `schema/task.md` | TASK frontmatter contract (fields, lifecycle, body sections). |
+| `schema/batch.md` | BATCH manifest frontmatter contract (fields, lifecycle, `tasks[]`). |
 | `settings.snippet.json` | The two hooks wired for a target repo's `.claude/settings.json`. |
 
 ## Why these are Phase 0
