@@ -6,4 +6,6 @@ disable-model-invocation: true
 
 Run a `/grilling` session.
 
-<!-- Adapted verbatim from mattpocock/skills (MIT): skills/productivity/grill-me. -->
+---
+
+*Adapted from [Matt Pocock's **grill-me** skill](https://github.com/mattpocock/skills/tree/main/skills/productivity/grill-me) — MIT, © Matt Pocock. Used verbatim.*

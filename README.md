@@ -209,6 +209,17 @@ authored by Claude Code** driving this very harness, then pressure-tested throug
 
 ---
 
+## Acknowledgements
+
+The human-driven interview on-ramp — the [`grilling`](skills/grilling/SKILL.md) and
+[`grill-me`](skills/grill-me/SKILL.md) skills behind `/grill-to-design` — is adapted
+from **[Matt Pocock's skills](https://github.com/mattpocock/skills)** (MIT, © Matt
+Pocock), used essentially verbatim. The only change is a guard so the interview never
+fires inside an autonomous loop. All credit for the grilling method is his.
+
+---
+
 ## License
 
-[MIT](LICENSE) © Márton Fenyvesi.
+[MIT](LICENSE) © Márton Fenyvesi. Portions of the grill skills are © Matt Pocock (MIT) —
+see [Acknowledgements](#acknowledgements).

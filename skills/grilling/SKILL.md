@@ -13,6 +13,6 @@ If a *fact* can be found by exploring the codebase, look it up rather than askin
 
 Do not enact the plan until I confirm we have reached a shared understanding.
 
-<!-- Adapted from mattpocock/skills (MIT): skills/productivity/grilling. Only the
-     opening interactive/human-driven guard is added — this repo is autonomous by
-     default, so the loop must never fire an interview. The rest is verbatim. -->
+---
+
+*Adapted from [Matt Pocock's **grilling** skill](https://github.com/mattpocock/skills/tree/main/skills/productivity/grilling) — MIT, © Matt Pocock. The opening interactive/human-driven guard (so the autonomous loop never fires an interview) is this repo's only addition; the rest is verbatim.*
