@@ -222,4 +222,4 @@ fires inside an autonomous loop. All credit for the grilling method is his.
 ## License
 
 [MIT](LICENSE) © Márton Fenyvesi. Portions of the grill skills are © Matt Pocock (MIT) —
-see [Acknowledgements](#acknowledgements).
+see [Acknowledgements](#acknowledgements) and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
