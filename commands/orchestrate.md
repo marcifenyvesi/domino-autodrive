@@ -6,7 +6,7 @@ allowed-tools: Read, Glob, Grep, Edit, Write, Bash, Agent, Skill
 
 # /orchestrate — single-session subagent fan-out
 
-Design + rationale: `docs/design/SPEC.md` §S11 (R-15). This is the **single Claude
+This is the **single Claude
 Code session** variant of the fleet path in `commands/autodrive.md` §C: instead of
 N concurrent CLI agents each running the whole loop, **one** orchestrator session
 claims scope-disjoint tasks, provisions a worktree per task, and spawns **Task-tool
@@ -19,11 +19,11 @@ python3 "$ENGINE" <subcommand> ...                  # all return JSON on stdout
 
 > **Golden rule of resumability:** trust the *ledger files*, never conversation
 > memory. After any restart, re-derive state from `python3 "$ENGINE" status`
-> (the `claims` alias, SPEC-S9.2). The committed ledger is authoritative.
+> (the `claims` alias). The committed ledger is authoritative.
 
 This mode reuses the engine's `claim` / scope-guard / `worktree-add` /
 `scope-audit` / `merge` machinery verbatim. It does **not** use the
-holder / lease / reaper layer (SPEC-S6) — see §No holder below.
+holder / lease / reaper layer — see §No holder below.
 
 ---
 
@@ -56,14 +56,14 @@ processes race for the same task).
 
 ---
 
-## A. `run` — the orchestrator loop (SPEC-S11.1)
+## A. `run` — the orchestrator loop
 
 Each **wave**:
 
 1. **Pick a disjoint set.** `python3 "$ENGINE" next-parallel-set --n K`
    (K ≤ `parallel.max`) → up to K ready tasks that are mutually scope-disjoint AND
    disjoint from every live claim, in DAG order honouring `depends_on[]`
-   (SPEC-S4.2). Empty → no parallelizable frontier remains → go to the **Merge
+   Empty → no parallelizable frontier remains → go to the **Merge
    phase**, then to **Wrap-up**.
 
 2. **Claim + provision, per task** (orchestrator writes; the subagent never
@@ -77,7 +77,7 @@ Each **wave**:
      worktree:`). `.worktrees/` is gitignored.
    - `python3 "$ENGINE" set-state --task <id> --to in-progress --branch task/<id>`
      — records the active `scope[]` the path-based PreToolUse guard enforces for
-     *this* worktree (SPEC-S8.3 / S11.3).
+     *this* worktree.
 
 3. **Spawn the K subagents CONCURRENTLY.** In **one** message, issue K Agent
    (Task) calls — one per claimed task — each carrying the **subagent briefing
@@ -85,7 +85,7 @@ Each **wave**:
    Never exceed `parallel.max` live subagents.
 
 4. **On each subagent's return** (per task):
-   - **Authoritative boundary FIRST** (SPEC-S8.4, before accepting anything):
+   - **Authoritative boundary FIRST** (before accepting anything):
      `python3 "$ENGINE" scope-audit --session <label>` re-diffs the worktree's
      branch vs base (staged + untracked) against the claimed `scope[]` and the
      sensitive-path deny-list, rejecting/rolling back any out-of-scope change (or
@@ -99,14 +99,13 @@ Each **wave**:
      `rm -rf`).
 
 5. **After the wave — Merge phase.** Once the wave's claims are all released,
-   integrate the completed branches. Merges are **sequential and verify-gated**
-   (SPEC-S7.2):
+   integrate the completed branches. Merges are **sequential and verify-gated**:
    - `python3 "$ENGINE" merge-ready [--base <integration-branch>]` → the
      `task/<id>` branches whose task is `done` and not yet merged.
    - `python3 "$ENGINE" merge [--verify "<cmd>"] [--base <integration-branch>]`
      merges them **one at a time**, running the repo verify after each. Disjoint
      scopes make this conflict-free by construction, but the per-merge verify still
-     catches **semantic** conflicts a clean textual merge misses (SPEC-S7.4). On a
+     catches **semantic** conflicts a clean textual merge misses. On a
      git conflict OR a failing verify, `merge` **stops**, leaves already-merged
      branches intact, and emits `needs-human` for the offending branch — it never
      auto-resolves. Escalate that branch; the rest wait for the next merge run.
@@ -124,7 +123,7 @@ frontier, and any pending merge escalations.
 
 ---
 
-## B. Subagent briefing template (SPEC-S11.2)
+## B. Subagent briefing template
 
 Paste this into each Agent (Task) call, substituting `<id>`, `<scope-list>`, and
 `<task-doc-path>`. It is everything a subagent needs to work in isolation — the
@@ -152,10 +151,10 @@ WHAT TO DO
 
 HARD PROHIBITIONS (a breach fails the task at the orchestrator's post-turn audit):
 - NEVER `git commit --no-verify` / `git commit -n` — the pre-commit scope hook
-  MUST run (SPEC-S8.5). Bypassing it is a defect, not a shortcut.
+  MUST run. Bypassing it is a defect, not a shortcut.
 - NEVER `cd` (or write) outside .worktrees/<id>/. Your cwd stays in the worktree.
 - NEVER run any external `git push` or `git fetch` — no network git, ever.
-- NEVER `git stash` (the reflog is shared across worktrees, SPEC-S5.4) and never
+- NEVER `git stash` (the reflog is shared across worktrees) and never
   touch another task's worktree or files outside your scope[].
 
 The path-based PreToolUse guard hard-denies writes outside your worktree/scope,
@@ -165,10 +164,10 @@ bounds is the only way your work lands.
 
 ---
 
-## No holder (SPEC-S11.4)
+## No holder
 
 This mode does **NOT** launch `hold-claim` and does **not** depend on the
-lease / heartbeat / reaper layer (SPEC-S6). There is no long-lived holder process
+lease / heartbeat / reaper layer. There is no long-lived holder process
 per task: the orchestrator observes each subagent's completion **directly** (the
 Agent call returns) and `release`s that claim itself, in step 4. No `heartbeat`
 calls are needed — a claim lives exactly as long as its subagent runs.
@@ -186,15 +185,15 @@ calls are needed — a claim lives exactly as long as its subagent runs.
 
 Confinement is enforced in two layers, and it matters which one is authoritative:
 
-- The **path-based PreToolUse guard** (SPEC-S11.3) is a **fast-fail front line**.
+- The **path-based PreToolUse guard** is a **fast-fail front line**.
   It resolves each write against the claim owning the *target file's* worktree
   (longest-prefix match under `.worktrees/<id>`). But it can **fail open**: if a
   subagent breaches confinement — e.g. `cd`s into the main repo and writes there —
   the target path is under *no* registered worktree, cwd is the main repo, and with
   ≥2 live claims the singleton view is `None`, so the guard cannot attribute the
   write and lets it through.
-- The **authoritative catch is the post-turn `scope-audit --session <label>`**
-  (SPEC-S8.4), run in step 4 **before** the orchestrator accepts the turn. It
+- The **authoritative catch is the post-turn `scope-audit --session <label>`**,
+  run in step 4 **before** the orchestrator accepts the turn. It
   re-diffs the whole worktree branch against the claimed `scope[]` + deny-list and
   **rejects the task before the change is accepted** — the layer no `--no-verify`
   can evade.
@@ -218,7 +217,7 @@ single-session orchestration there is nothing to contend.
 
 ---
 
-## Back-compat (SPEC-S11.5, PRD-R15)
+## Back-compat
 
 This mode is **purely additive**:
 
@@ -241,7 +240,7 @@ goes live on the next seeded snapshot.
 
 ## `status`
 
-`python3 "$ENGINE" status` (the `claims` alias, SPEC-S9) — print the frontier plus
+`python3 "$ENGINE" status` (the `claims` alias) — print the frontier plus
 every live claim (session, task, batch, scope, branch, worktree, age) and stop.
 
 ---

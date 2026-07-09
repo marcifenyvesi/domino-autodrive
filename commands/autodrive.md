@@ -18,7 +18,7 @@ python3 "$ENGINE" <subcommand> ...                  # all return JSON on stdout
 > **Golden rule of resumability:** trust the *ledger files*, never your
 > conversation memory. After any restart, re-derive state from
 > `python3 "$ENGINE" status` + `resume-check`. `status` is the now-shipped
-> observability subcommand (an alias of `claims`, SPEC-S9.2). The transcript may
+> observability subcommand (an alias of `claims`). The transcript may
 > be gone; the committed ledger is not.
 >
 > **`--resume` fast-path:** if you *do* still have the
@@ -38,9 +38,9 @@ python3 "$ENGINE" <subcommand> ...                  # all return JSON on stdout
   task at a time (the legacy N=1 path).
 - **`run --parallel`** — opt-in fleet mode: N concurrent CLI agents, each in its
   own worktree, sharing the same challenge/implement/test/audit loop (§C). Off
-  by default; N=1 behaviour is unchanged (SPEC-S10.2, PRD-R11).
-- **`status`** — print the frontier + every live claim (the `claims` alias,
-  SPEC-S9) and stop.
+  by default; N=1 behaviour is unchanged.
+- **`status`** — print the frontier + every live claim (the `claims` alias)
+  and stop.
 - **`resume`** — run the reconciliation check (§B step 1b) and report what a
   `run` would do, without doing it.
 
@@ -77,7 +77,7 @@ If the engine isn't present yet (fresh clone of the global tools), copy it from
 
 **Each iteration:**
 
-1. **Read state.** `python3 "$ENGINE" status` (the `claims` alias, SPEC-S9.2). Note
+1. **Read state.** `python3 "$ENGINE" status` (the `claims` alias). Note
    the active batch, any in-flight task, any live claims, and open `needs-human`.
 
    **1b. Resume reconciliation** (only if a task is in-flight):
@@ -176,8 +176,8 @@ If the engine isn't present yet (fresh clone of the global tools), copy it from
 The **same** loop, run by N concurrent CLI agents instead of one. **Opt-in
 only.** With no `--parallel` flag and a single live session the command runs the
 §B path verbatim — the legacy single-writer lock (§B preflight `lock`/`unlock`)
-stays the N=1 default and its observable behaviour equals today's (SPEC-S10.2,
-PRD-R11). Nothing below replaces §B; it wraps §B in a supervisor + isolated
+stays the N=1 default and its observable behaviour equals today's. Nothing below
+replaces §B; it wraps §B in a supervisor + isolated
 worktrees. Concurrency is capped at `.harness.yaml parallel.max` (default 4;
 Anthropic's 3–4 worktree guidance — ≥5 hits rate limits and is unreviewable).
 
@@ -193,8 +193,8 @@ user-facing subcommand — and every live claim is visible via `status`/`claims`
 
 1. **Pick a disjoint set.** `python3 "$ENGINE" next-parallel-set --n K`
    (K ≤ `parallel.max`) → up to K ready tasks that are mutually scope-disjoint
-   AND disjoint from every live claim, in DAG order, honouring `depends_on[]`
-   (SPEC-S4.2). Empty → no parallelizable frontier → fall back to §B or go to
+   AND disjoint from every live claim, in DAG order, honouring `depends_on[]`.
+   Empty → no parallelizable frontier → fall back to §B or go to
    the **Merge phase**.
 2. **Claim + provision, per task.** Atomically **claim** each returned task in
    the shared registry (one winner per task; a lost race just drops that task
@@ -203,7 +203,7 @@ user-facing subcommand — and every live claim is visible via `status`/`claims`
    branch `task/<id>` (creation serialized under the state lock; `link`/`copy`/
    `ready` provisioning per `.harness.yaml worktree:`). `.worktrees/` is
    gitignored.
-   **Launch the claim holder** (SPEC-S6.5) immediately after a winning claim, as
+   **Launch the claim holder** immediately after a winning claim, as
    a background process bound to the agent that will run this task:
 
    ```bash
@@ -225,13 +225,13 @@ user-facing subcommand — and every live claim is visible via `status`/`claims`
    any claim past its `lease_expiry` is reset to `todo` (clean worktree) or
    quarantined (`quarantine/<id>-<sha>`, task → `needs-human`). `reap` never
    touches a claim still inside its lease, so one live agent never disturbs
-   another (SPEC-S6). Observe the fleet any time with
+   another. Observe the fleet any time with
    `python3 "$ENGINE" claims` (alias `status`).
 
    With a holder running (step 2), `reap`'s flock-primary crash detection is
    **instant**: its non-blocking flock acquire fails while the agent lives (skip)
-   and succeeds the moment the agent crashes (reclaim now, no lease-TTL wait —
-   SPEC-S6.5). If no holder was launched, the loop still reclaims via the
+   and succeeds the moment the agent crashes (reclaim now, no lease-TTL wait).
+   If no holder was launched, the loop still reclaims via the
    heartbeat/lease backstop once the lease expires — slower, but graceful
    degradation with no regression.
 
@@ -240,15 +240,15 @@ user-facing subcommand — and every live claim is visible via `status`/`claims`
 
 1. `python3 "$ENGINE" set-state --task <id> --to in-progress --branch task/<id>`
    — records the active scope the PreToolUse scope guard + pre-commit hook
-   enforce for *this* worktree (session-resolved, SPEC-S8.3).
+   enforce for *this* worktree (session-resolved).
 2. **Run the existing §B challenge → implement → test → audit loop verbatim**,
    scoped to `.worktrees/<id>`. The implementer may touch only `scope[]`; the
    per-worktree hook hard-denies the rest.
 3. **Refresh the lease every iteration:** `python3 "$ENGINE" heartbeat --session
    <id>` at the top of each pass — a long implement/test step must not let the
-   lease expire under a live agent and get reaped (SPEC-S6.1).
-4. **Authoritative post-turn boundary — before accepting the commit**
-   (SPEC-S8.4 / PRD-R13): `python3 "$ENGINE" scope-audit --session <id>`
+   lease expire under a live agent and get reaped.
+4. **Authoritative post-turn boundary — before accepting the commit:**
+   `python3 "$ENGINE" scope-audit --session <id>`
    re-diffs the worktree's branch vs base (staged + untracked) against the
    claimed `scope[]` and the sensitive-path deny-list, and rejects/rolls back
    any out-of-scope change (or marks `needs-human`). This is the layer no
@@ -262,20 +262,19 @@ user-facing subcommand — and every live claim is visible via `status`/`claims`
    `prune`; `--force` only for a deliberately discarded dirty tree — never
    `rm -rf`).
 
-**Crash isolation (PRD-R12):** killing one agent leaves every other agent's
+**Crash isolation:** killing one agent leaves every other agent's
 claim and worktree intact; `reap` reclaims only the dead session's task, and
 per-session resume reconciliation (§B step 1b) adopts/restarts/quarantines only
 that task. **Agents must never `git stash`** in a worktree — the stash reflog is
 a single stack shared across all worktrees, so one stash silently surfaces or
-drops another's work (SPEC-S5.4).
+drops another's work.
 
 ---
 
 ## Merge phase (operator/supervisor, after the fleet drains)
 
 Run once the fleet has no live claims (`claims`/`status` empty) and the
-parallelizable frontier is exhausted. Merges are **sequential and verify-gated**
-(SPEC-S7.2, PRD-R7):
+parallelizable frontier is exhausted. Merges are **sequential and verify-gated**:
 
 1. `python3 "$ENGINE" merge-ready [--base <integration-branch>]` → the
    `task/<id>` branches whose task is `done` and not yet merged into the
@@ -284,7 +283,7 @@ parallelizable frontier is exhausted. Merges are **sequential and verify-gated**
    merges them **one at a time**, running the repo verify after each merge.
    Disjoint scopes make this conflict-free by construction, but the per-merge
    verify still catches **semantic** conflicts a clean textual merge misses
-   (e.g. a rename at call sites vs a new call to the old name — SPEC-S7.4).
+   (e.g. a rename at call sites vs a new call to the old name).
 3. On a **git conflict OR a failing verify**, `merge` **stops**, leaves the
    already-merged branches intact, and emits a `needs-human` ledger event for
    the offending branch — it never auto-resolves. Escalate that branch; the
@@ -292,7 +291,7 @@ parallelizable frontier is exhausted. Merges are **sequential and verify-gated**
 
 Shared generated/index files stay **out of agent `scope[]`** (lockfiles,
 barrel/`__init__.py`/index files, formatter-owned config); lockfiles are
-regenerated once post-merge, not merged (SPEC-S7.4).
+regenerated once post-merge, not merged.
 
 ---
 
