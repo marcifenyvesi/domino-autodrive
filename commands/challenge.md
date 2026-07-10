@@ -30,14 +30,35 @@ this command runs — honor any defaults they pass.
 - **`--report <path>`** — *audit-foldback mode.* Target IS a report;
   foldback edits the audited code, not the report.
 - **`--auto`** — skip Q&A for ambiguous findings; best-guess the
-  conservative option and flag with `auto-decided`. Code edits and
-  edits to design docs / ratified ADRs still never auto-apply.
+  conservative option and flag with `auto-decided`. See the `--auto`
+  section; the safety invariants (below) hold unchanged.
 - **diff modes** — `--since <ref>`, `--staged`, a git ref, or a single
   file path resolves the target to a diff (AI-work-check angle). If
   the resolved change set is empty, report "nothing to challenge" and
   stop.
 
 Multiple modes compose (e.g., `--auto --since HEAD~3`).
+
+---
+
+## Safety invariants (single source — referenced everywhere else)
+
+These four hold in **every mode**, including `--auto`. The rest of the
+command points here rather than restating them.
+
+- **S1 — Findings doc first.** In a git repo, commit the findings doc
+  *before* any foldback edit. It's the durable safety property: if
+  anything downstream breaks, the findings survive and `git revert`
+  restores.
+- **S2 — Code (L4) is never auto-applied.** Any fix that edits code is
+  `flagged`, surfaced for the user, never written automatically — not
+  even in `--auto`.
+- **S3 — L1/L2 edits always require Q&A.** Editing a ratified design doc
+  (L1) or Accepted ADR (L2) always pauses for explicit accept, even when
+  the fold-direction is unambiguous and even in `--auto` (which flags +
+  best-guesses but never writes them).
+- **S4 — Per-scope commits.** One file's changes = one commit (or a
+  tight logical group), so any single fold reverts cleanly.
 
 ---
 
@@ -71,7 +92,7 @@ Parse `$ARGUMENTS`:
      one-line "no review target detected — pass a path, glob, or git
      ref as `$ARGUMENTS`".
 
-**Detect target type** (drives reference systems and reviewer prompts):
+**Detect target type** (drives the playbook in the next section):
 
 - **`agent-spec`** — agents, tools, manifests, playbooks, LLM loops,
   MCP, prompts, skills.
@@ -85,7 +106,8 @@ Parse `$ARGUMENTS`:
 - **`general-docs`** — fall-through bucket.
 
 If ambiguous, pick the most-specific match and note the choice in the
-report.
+report. `code-quality` and `ai-work-diff` are the **code targets** —
+they pull in `STANDARDS.md` (Step 1, and their playbook rows).
 
 **Output path.** Compute today's date with `Get-Date -Format yyyy-MM-dd`
 (PowerShell on Windows) or `date +%F` (bash elsewhere). Write to:
@@ -113,7 +135,7 @@ character.
 
 | Level | Authority | Character | Examples |
 |---|---|---|---|
-| **L1** | Ratified design intent | "what should be true" docs | `PRD.md`, `HLD.md`, `ARCH-SPEC.md`, `SPEC.md` |
+| **L1** | Ratified design intent | "what should be true" docs | `PRD.md`, `HLD.md`, `ARCH-SPEC.md`, `SPEC.md`; **`STANDARDS.md`** (the coding contract — how code must be written) |
 | **L2** | Ratified atomic decisions | ADRs marked Accepted | `docs/adrs/adr-*.md` |
 | **L3** | Completed task agreements | Tasks referenced by `git log` as `Implements: …` | shipped task entries |
 | **L4** | Working code | What builds + passes tests | `src/`, `Sources/`, `tests/`, `Package.swift` |
@@ -123,17 +145,19 @@ character.
 When unsure where something sits, treat it as L5/L6 (default to lower
 authority) and surface a Q&A.
 
-**Fold-direction rule.** A finding is a misalignment between artifact A
+`STANDARDS.md` is **L1-authority for *how* code is written**. Because a
+fix for a STANDARDS violation is always a code (L4) edit, such findings
+are `flagged` under **S2** — surfaced, never auto-folded.
+
+**Fold-direction rule** — a finding is a misalignment between artifact A
 and artifact B:
 
 - A higher than B → B yields to A. Fold edits B.
 - Same level → **ambiguous**. Ask the user (or in `--auto`, pick the
   conservative option).
-- Both are L4 (code), or the fix requires a code edit → never
-  auto-apply. Surface as flagged.
-- Fix requires editing L1 (design doc) or L2 (ratified ADR) →
-  **always require Q&A**, even if direction is clear and even in
-  `--auto`. Design changes are direction, not derivation.
+- Direction crosses a safety invariant → **S1–S4 win.** Both L4 (code),
+  or a fix needing a code edit → `flagged` (S2). Editing L1/L2 →
+  always Q&A (S3).
 
 **Self-judging guard.** If the change *is* an edit to a reference, that
 reference cannot be its own judge. Use the prior committed version of
@@ -141,34 +165,131 @@ the same file plus the remaining hierarchy.
 
 ---
 
-## Reference systems — adaptive baseline
+## Reference systems & type playbooks
 
-Pick by detected type, then add any user-specified extras from `$ARGUMENTS`:
+Each **playbook** below co-locates everything type-specific: the baseline
+reference systems, the extra questions Agent A appends, the dimensions
+each reference-system agent (B+) covers, and the foldback tiers offered
+in Step 6b. Resolve the detected type's playbook once; Steps 2 and 6
+point back to it. Add any user-specified reference systems from
+`$ARGUMENTS` to the baseline.
 
-| Target type        | Baseline reference systems |
-| ------------------ | -------------------------- |
-| `agent-spec`       | MCP (Anthropic), LangGraph, CrewAI, AutoGen, OpenHands, OpenAI Agents SDK |
-| `security-report`  | OWASP Top 10 (current year), OWASP ASVS, MCP security guidance (Anthropic), Anthropic responsible tool-use docs, CWE Top 25 |
-| `architecture-doc` | C4 model, AWS Well-Architected (relevant pillars), Google SRE workbook patterns |
-| `api-spec`         | OpenAPI 3.1 spec, JSON:API, Google API design guide, Stripe API conventions |
-| `code-quality`     | Google style guide for the target language, project's own conventions (grep `CONTRIBUTING.md`, lint configs) |
-| `ai-work-diff`     | none external by default — focus on in-repo references (Step 1 below) |
-| `general-docs`     | none by default — internal consistency only unless extras passed |
+**General reference rules (all types):**
 
-**Local-clone preference:** before WebFetching any reference system,
-check whether a local clone of it is already available on this machine —
-if present, the reference-system subagent should read the local source
-with Glob/Grep/Read. Primary sources beat third-party summaries. Fall
-back to WebFetch only if no local clone is found.
+- **Local-clone preference:** before WebFetching any reference system,
+  check whether a local clone of it is already on this machine — if
+  present, the reference agent reads the local source with Glob/Grep/Read.
+  Primary sources beat third-party summaries. Fall back to WebFetch only
+  if no local clone is found.
+- **User-specified system unresolvable:** if a name from `$ARGUMENTS`
+  doesn't match a known project after a web search, list nearest matches
+  in the report and proceed without it. Do not fabricate a comparison.
+- After resolving, write a one-line plan to the user before spawning:
+  > "Target: `<path>` (`<type>`, L<N>). Mode: <default | --report |
+  > --auto | diff>. Output: `<reviews-path>`. Spawning N agents:
+  > internal consistency + <ref1>, <ref2>, ... ."
 
-**User-specified system unresolvable:** if a name from `$ARGUMENTS`
-doesn't match a known project after a web search, list nearest matches
-in the report and proceed without it. Do not fabricate a comparison.
+### Playbook — `agent-spec`
 
-Write a brief one-line plan to the user before spawning agents:
-> "Target: `<path>` (`<type>`, L<N>). Mode: <default | --report |
-> --auto | diff>. Output: `<reviews-path>`. Spawning N agents:
-> internal consistency + <ref1>, <ref2>, ... ."
+- **References:** MCP (Anthropic), LangGraph, CrewAI, AutoGen, OpenHands,
+  OpenAI Agents SDK.
+- **Agent A adds:** cross-file refs valid? `.env` shape consistent across
+  files? Tool signatures match between definition and call sites?
+  Dependency declarations form a valid DAG? Conventions (naming, error
+  format, idempotency) followed consistently? Acceptance criteria
+  mutually satisfiable? Open questions in conflict or duplicated? Phase
+  labels match dependencies? Hard rules in the loop prompt consistent
+  with what other tasks expect?
+- **Agent B dimensions:** tool layer, agent loop, HITL/approval, state &
+  memory, observability, self-extension, multi-model portability.
+- **Foldback tiers:** MAJOR consistency only / MAJOR + portability
+  renames / All top-5 recommendations / Stop — review only.
+
+### Playbook — `security-report`
+
+- **References:** OWASP Top 10 (current year), OWASP ASVS, MCP security
+  guidance (Anthropic), Anthropic responsible tool-use docs, CWE Top 25.
+- **Agent A adds:** severity rubric applied consistently? Each finding
+  has location + evidence + impact + fix? Any contradictions between
+  findings? Recommended fixes mutually compatible? Findings missing
+  severity? "We should do X" without owner/effort? Trust-model
+  assumptions stated explicitly?
+- **Agent B dimensions:** finding-taxonomy alignment, severity
+  calibration vs. industry norms, missing categories industry references
+  would flag, fix recommendations vs. industry best practices,
+  trust-model assumptions vs. industry threat models.
+- **Foldback tiers** (audit-foldback): Critical + High only / Critical +
+  High + Medium / All findings with concrete fixes / Stop — review only.
+
+### Playbook — `architecture-doc`
+
+- **References:** C4 model, AWS Well-Architected (relevant pillars),
+  Google SRE workbook patterns.
+- **Agent A adds:** terminology drift across sections? Diagrams
+  consistent with prose? Stated constraints honored throughout? Quality
+  attributes (latency/throughput/cost) numerically grounded or hand-wavy?
+- **Agent B dimensions:** layering, deployment topology, failure-mode
+  coverage, observability, scaling story.
+- **Foldback tiers:** MAJOR consistency only / MAJOR + portability
+  renames / All top-5 recommendations / Stop — review only.
+
+### Playbook — `api-spec`
+
+- **References:** OpenAPI 3.1 spec, JSON:API, Google API design guide,
+  Stripe API conventions.
+- **Agent A adds:** endpoint naming consistency? Error format
+  consistency? Versioning scheme uniform? Auth declared on every
+  endpoint? Pagination, sorting, filtering consistent?
+- **Agent B dimensions:** resource modeling, error handling, versioning,
+  auth, pagination/filtering, async patterns, deprecation policy.
+- **Foldback tiers:** MAJOR consistency only / MAJOR + portability
+  renames / All top-5 recommendations / Stop — review only.
+
+### Playbook — `code-quality`  *(code target)*
+
+- **References:** the project's own **`STANDARDS.md`** (repo root or
+  `.claude/harness/STANDARDS.md`) — the authoritative coding contract,
+  L1; then the Google style guide for the target language; then project
+  conventions (grep `CONTRIBUTING.md`, lint configs).
+- **Agent A adds:** rules contradict each other? Examples follow the
+  rules they illustrate? Rationale stated for non-obvious rules? Does the
+  guide align with, or contradict, `STANDARDS.md`?
+- **Agent B dimensions:** align the guide against the Google style guide
+  for the language and note where it diverges from `STANDARDS.md`.
+- **Foldback tiers:** MAJOR consistency only / MAJOR + portability
+  renames / All top-5 recommendations / Stop — review only.
+
+### Playbook — `ai-work-diff`  *(code target)*
+
+- **References:** none external by default — focus on in-repo references
+  (Step 1) **plus `STANDARDS.md`** as the L1 coding contract the diff
+  must satisfy. Add external systems only if the user passes them.
+- **Agent A adds:** Drift (contradicts a reference)? Creep (adds scope
+  references didn't sanction — e.g., a Phase 2 capability delivered as
+  Phase 1)? Gap (skips something references required)? Cohesion
+  (contradicts or duplicates prior committed code)? Phasing (deferred
+  capability now treated as available)? Naming consistency (paths,
+  command names, schema fields, module layout match across docs and
+  code)? Index hygiene (new artifacts added to indexes that list them)?
+  Open questions answered, deferred-with-reason, or silently skipped?
+  Self-consistency inside the change itself (versions, dates, phase
+  labels, cross-refs)? Behavioural promises (does code match the
+  architecture spec's module layout, models, names)? **STANDARDS
+  conformance (does the diff violate any rule in `STANDARDS.md` §1–8?
+  cite the section).**
+- **Agent B dimensions:** external reference agents are usually
+  unnecessary — skip unless the user passed reference systems as extras.
+- **Foldback tiers:** foldback updates the diff (or references), not a
+  separate target — offer the standard MAJOR / structural / stop set.
+
+### Playbook — `general-docs`
+
+- **References:** none by default — internal consistency only unless
+  extras passed.
+- **Agent A adds:** terminology drift? Stale references (links, paths,
+  version numbers)? Contradictions between sections?
+- **Agent B dimensions:** none unless the user passes reference systems.
+- **Foldback tiers:** the standard MAJOR / structural / stop set.
 
 ---
 
@@ -183,14 +304,20 @@ to find every artifact that **references** it or that it **references**:
   they reference (`Implements: T-NNN.M`).
 - For task targets: `git log --grep="T-NNN.M"` to see if shipped
   (promotes L5 → L3).
-- For `ai-work-diff`: read every file in the project reference
-  hierarchy that has plausible bearing on the touched files. Don't
-  trust recall; re-read.
+- **For code targets (`ai-work-diff`, `code-quality`): load
+  `STANDARDS.md`.** If `STANDARDS.md` exists at the repo root or
+  `.claude/harness/STANDARDS.md`, read it and tag it a **primary
+  reference** (L1). It's the coding contract the code must satisfy;
+  `/autodrive` enforces it on the implement side, so `/challenge` holds
+  code to the same bar.
+- For `ai-work-diff`: read every file in the project reference hierarchy
+  that has plausible bearing on the touched files. Don't trust recall;
+  re-read.
 
 Tag each blast-radius artifact:
 
-- **Primary references** = higher level than target. Authoritative
-  voices the target must agree with.
+- **Primary references** = higher level than target (incl. `STANDARDS.md`
+  for code). Authoritative voices the target must agree with.
 - **Peers** = same level. Same-level disagreements are ambiguous and
   need Q&A.
 - **Secondary references** = lower level. Useful context but don't
@@ -207,7 +334,7 @@ Send a single message with multiple `Agent` tool calls.
 
 ### Agent A — Internal consistency reviewer
 
-Tailor the prompt to target type. **Common spine:**
+**Common spine:**
 
 > Read every file in the target set and the in-repo blast radius from
 > Step 1. Produce a consistency audit citing `file:line-or-section`
@@ -215,49 +342,18 @@ Tailor the prompt to target type. **Common spine:**
 > / NIT), location, description, suggested fix. End with a 3-sentence
 > verdict. Aim for ≤400 lines.
 
-Append type-specific questions:
+Then **append the detected type's "Agent A adds" questions** from its
+playbook. For code targets, include the STANDARDS-conformance check and
+pass the loaded `STANDARDS.md` in the prompt.
 
-- **`agent-spec`:** cross-file refs valid? `.env` shape consistent
-  across files? Tool signatures match between definition and call
-  sites? Dependency declarations form a valid DAG? Conventions
-  (naming, error format, idempotency) followed consistently?
-  Acceptance criteria mutually satisfiable? Open questions in conflict
-  or duplicated? Phase labels match dependencies? Hard rules in the
-  loop prompt consistent with what other tasks expect?
-- **`security-report`:** severity rubric applied consistently? Each
-  finding has location + evidence + impact + fix? Any contradictions
-  between findings? Recommended fixes mutually compatible? Findings
-  missing severity? "We should do X" without owner/effort? Trust-model
-  assumptions stated explicitly?
-- **`architecture-doc`:** terminology drift across sections? Diagrams
-  consistent with prose? Stated constraints honored throughout? Quality
-  attributes (latency/throughput/cost) numerically grounded or
-  hand-wavy?
-- **`api-spec`:** endpoint naming consistency? Error format
-  consistency? Versioning scheme uniform? Auth declared on every
-  endpoint? Pagination, sorting, filtering consistent?
-- **`code-quality`:** rules contradict each other? Examples follow
-  the rules they illustrate? Rationale stated for non-obvious rules?
-- **`ai-work-diff`:** Drift (contradicts a reference)? Creep (adds
-  scope references didn't sanction — e.g., Phase 2 capability
-  delivered as Phase 1)? Gap (skips something references required)?
-  Cohesion (contradicts or duplicates prior committed code)? Phasing
-  (deferred capability now treated as available)? Naming consistency
-  (paths, command names, schema fields, module layout match across
-  docs and code)? Index hygiene (new artifacts added to indexes that
-  list them)? Open questions answered, deferred-with-reason, or
-  silently skipped? Self-consistency inside the change itself
-  (versions, dates, phase labels, cross-refs)? Behavioural promises
-  (does code match architecture spec's module layout, models, names)?
-- **`general-docs`:** terminology drift? Stale references (links,
-  paths, version numbers)? Contradictions between sections?
-
-For `ai-work-diff`: if a fast verification is cheap (lint, typecheck,
-focused test file), run it. Failures become high-severity findings.
+For `ai-work-diff` / code targets: if a fast verification is cheap (lint,
+typecheck, focused test file), run it. Failures become high-severity
+findings.
 
 ### Agents B+ — One per reference system
 
-For each system in the resolved baseline + extras, spawn ONE agent:
+For each system in the detected type's playbook baseline + user extras,
+spawn ONE agent (`ai-work-diff` usually spawns none — see its playbook):
 
 > You are evaluating `<target>` against `<SYSTEM_NAME>`. First refresh
 > your understanding of `<SYSTEM_NAME>`'s current architecture/
@@ -268,11 +364,11 @@ For each system in the resolved baseline + extras, spawn ONE agent:
 >
 > Then read the target files at `<target-paths>`.
 >
-> Produce a comparison covering dimensions appropriate to the target
-> type. For each dimension: state what `<SYSTEM_NAME>` does, what the
-> target does, and a verdict — **aligned / acceptable divergence /
-> problematic divergence**. Cite specific doc URLs for `<SYSTEM_NAME>`
-> claims and `file:section` for the target. End with:
+> Produce a comparison covering the **dimensions for this target type**
+> (from the playbook). For each dimension: state what `<SYSTEM_NAME>`
+> does, what the target does, and a verdict — **aligned / acceptable
+> divergence / problematic divergence**. Cite specific doc URLs for
+> `<SYSTEM_NAME>` claims and `file:section` for the target. End with:
 > "If we were to migrate this to `<SYSTEM_NAME>` later, the migration
 > would be [trivial / moderate / hard] because [reasons]." Aim for
 > ≤300 lines.
@@ -280,26 +376,12 @@ For each system in the resolved baseline + extras, spawn ONE agent:
 > If `<SYSTEM_NAME>` cannot be located via search, return:
 > "Could not identify `<SYSTEM_NAME>`. Closest matches found: X, Y, Z."
 
-Dimensions per target type (specialize before sending):
-
-- **`agent-spec`:** tool layer, agent loop, HITL/approval, state &
-  memory, observability, self-extension, multi-model portability.
-- **`security-report`:** finding taxonomy alignment, severity
-  calibration vs. industry norms, missing categories industry
-  references would flag, fix recommendations vs. industry best
-  practices, trust-model assumptions vs. industry threat models.
-- **`architecture-doc`:** layering, deployment topology, failure-mode
-  coverage, observability, scaling story.
-- **`api-spec`:** resource modeling, error handling, versioning, auth,
-  pagination/filtering, async patterns, deprecation policy.
-
-For `ai-work-diff`: external reference-system agents are usually
-unnecessary. Skip unless the user explicitly passed reference systems
-as extras.
+Specialize the prompt with that type's **Agent B dimensions** before
+sending.
 
 ---
 
-## Step 3 — Generate findings
+## Step 3 — Generate findings (verdict assignment lives here)
 
 When all subagents return, consolidate into a unified finding list.
 Each finding has:
@@ -307,7 +389,7 @@ Each finding has:
 - `id` — `F-NN` (stable handle)
 - `kind` — drift | creep | gap | cohesion | phasing | naming | index
   | open-q | self-consist | runtime | contradiction | unstated-dep |
-  yagni | under-spec
+  yagni | under-spec | standards-violation
 - `source` — the higher-authority artifact involved (incl. level
   L1–L6 or external reference system)
 - `target` — the lower-authority artifact that would yield (or the
@@ -325,30 +407,23 @@ Each finding has:
 - `proposed_action` — concrete edit; for code, describe the change
   rather than a patch
 
-**Classification rules:**
+**Verdict assignment** (this is the single operational home; it enacts
+the safety invariants S1–S4):
 
-Mark `auto-foldback` only when **all** hold:
-
-- Reference clearly wins (target drifted, not the reference).
-- Fix is mechanical (rename, path-fix, version-bump, removing a
-  sentence that contradicts an explicit out-of-scope, updating a
-  stale index row, annotating a task).
-- No semantic decision required.
-- Doesn't cross a phase boundary, alter intended behaviour, or
-  delete non-trivial work.
-
-Mark `flagged` (never auto-applied, even in `--auto`) when fix
-requires:
-
-- A code edit (any L4 change)
-- File deletions, schema field renames, multi-file refactors
-- Version-control surgery (rebase / amend / force-push)
-- Dependency downgrades, removing tests
-- Editing L1 or L2 — always Q&A even if direction is clear
-
-Mark `needs-decision` for everything else. When in doubt →
-`needs-decision`. The cost of a wrong auto-foldback (silent
-regression) is higher than one extra Q&A turn.
+- **`auto-foldback`** — only when **all** hold: reference clearly wins
+  (target drifted, not the reference); the fix is mechanical (rename,
+  path-fix, version-bump, removing a sentence that contradicts an
+  explicit out-of-scope, updating a stale index row, annotating a task);
+  no semantic decision; doesn't cross a phase boundary, alter intended
+  behaviour, or delete non-trivial work.
+- **`flagged`** — the fix requires any of: a code edit (**S2** — any L4
+  change, incl. every STANDARDS violation), file deletions, schema field
+  renames, multi-file refactors, version-control surgery (rebase / amend
+  / force-push), dependency downgrades, or removing tests. Listed, never
+  auto-applied under any mode.
+- **`needs-decision`** — everything else, and editing L1/L2 (**S3**,
+  even when direction is clear). When in doubt → `needs-decision`; the
+  cost of a wrong auto-foldback (silent regression) beats one extra Q&A.
 
 ---
 
@@ -375,9 +450,8 @@ Quote findings from subagents verbatim where they're strong; summarize
 where verbose. Resolve subagent contradictions by re-fetching the
 canonical doc yourself.
 
-**Commit the findings doc BEFORE any foldback edits** (when in a git
-repo). This is the durable safety property — if anything downstream
-goes wrong, the findings remain. Commit message:
+**Commit the findings doc now, before any foldback edit (S1).** Commit
+message:
 
 ```
 docs(challenges): challenge-<DATE> — target <target>; N findings (A auto / Q q&a / F flagged)
@@ -420,9 +494,8 @@ For findings with `verdict: auto-foldback`:
 - After applying, re-read each touched file briefly to confirm the
   foldback didn't introduce a new drift.
 
-Commit per scope — one commit per modified file or per tight logical
-group. Conventional-commit prefix per project's `CLAUDE.md` (`docs:`,
-`refactor:`, `fix:`, `chore:`). Example:
+Commit per scope (**S4**), conventional-commit prefix per project's
+`CLAUDE.md` (`docs:`, `refactor:`, `fix:`, `chore:`):
 
 ```
 docs(<scope>): fold challenge findings F-AA[, F-BB] from challenge-<DATE>
@@ -432,8 +505,8 @@ docs(<scope>): fold challenge findings F-AA[, F-BB] from challenge-<DATE>
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 
-Never auto-apply `design-update` or `code-change` — those go through
-Step 6b or get flagged in Step 6c.
+Never auto-apply `design-update` (S3) or `code-change` (S2) — those go
+through Step 6b or get flagged in Step 6c.
 
 ### Step 6b — Q&A on ambiguous findings
 
@@ -452,41 +525,27 @@ Standard option set when applicable:
 
 1. **Defer to reference** — apply the foldback as proposed.
 2. **Accept the change** — update the reference instead (the change
-   is the better truth). Requires editing L1/L2 → still needs
-   explicit accept.
+   is the better truth). Editing L1/L2 → still needs explicit accept (S3).
 3. **Both wrong — let me describe** — escape hatch for nuance.
 4. **Skip** — record as rejected.
 
-**Also offer tiered scope of fixes** when many findings cluster:
+**Also offer tiered scope of fixes** when many findings cluster: present
+the detected type's **foldback tiers** from its playbook, and ask that
+tier question once. Ask individual challenges one at a time (the user's
+answers may affect later challenges); for tier-scoped sweeps, ask once
+and proceed.
 
-- For `agent-spec` / `architecture-doc` / `api-spec` / `code-quality`:
-  - "MAJOR consistency fixes only" — mechanical items from Agent A.
-  - "MAJOR + portability renames" — above plus low-effort structural items.
-  - "All top-5 recommendations" — above plus structural items
-    (folder restructures, new namespaces).
-  - "Stop here — review only, no edits."
-- For `security-report` (audit-foldback):
-  - "Critical + High only"
-  - "Critical + High + Medium"
-  - "All findings with concrete fixes"
-  - "Stop here — review only, no edits."
-
-Ask one challenge at a time when applying individual fixes — the
-user's answers may affect later challenges. For tier-scoped sweeps,
-ask the tier question once and proceed.
-
-**In `--auto` mode:** skip Q&A. For each ambiguous finding, pick the
-most conservative option (the one that does NOT edit a
-higher-authority artifact) and flag the choice in the findings doc
-with `auto-decided`. Edits to L1/L2 still require explicit accept —
-in `--auto` they get flagged + best-guessed but never written.
+**In `--auto` mode:** skip this Q&A. For each ambiguous finding pick the
+most conservative option (the one that does NOT edit a higher-authority
+artifact) and flag it `auto-decided` in the findings doc. S2/S3 still
+bind — code and L1/L2 are never written.
 
 ### Step 6c — Surface flagged findings
 
-`flagged` findings (code edits, schema renames, etc.) are listed in
-the findings doc but **never auto-applied** under any mode. They
-appear in the final report so the user can decide to write the fix
-themselves or hand it to their implementation loop.
+`flagged` findings (code edits per S2, schema renames, etc.) are listed
+in the findings doc but never auto-applied under any mode. They appear
+in the final report so the user can write the fix themselves or hand it
+to their implementation loop.
 
 ### Step 6d — Foldback log
 
@@ -634,14 +693,12 @@ recommendations. See Step 6d for shape. -->
 
 ## Rules that apply to every phase
 
+(Safety invariants **S1–S4** are defined once at the top and enacted in
+Step 3 — they are not restated here.)
+
 - **Never delete existing content.** Annotations are append-only.
-  `replace` / `deprecate` preserve original under `<details>`
-  blocks. History is data.
-- **Per-scope commits.** One file's changes = one commit (or a tight
-  logical group). Lets the user `git revert` a single fold cleanly.
-- **Findings doc first.** Always commit the findings doc before any
-  task/design edits. If something goes wrong downstream, the
-  findings remain.
+  `replace` / `deprecate` preserve original under `<details>` blocks.
+  History is data.
 - **Always cite.** Every external claim needs a source URL; every
   finding cites `file:line` on **both** sides.
 - **Specificity over volume.** Five sharp findings beat fifty fuzzy
@@ -654,27 +711,22 @@ recommendations. See Step 6d for shape. -->
   when there isn't.
 - **State your interpretation.** When `$ARGUMENTS` is ambiguous or
   the target's level isn't obvious, say what you picked and why.
-- **Don't soften.** State each challenge in its strongest form; let
-  the user soften it if they want.
-- **Don't fabricate.** If you can't cite, it's a hunch — drop it or
-  downgrade to `low` and label `weak-evidence`.
-- **Don't redo the work.** This is a quality gate, not a rewrite.
-  If you find yourself re-authoring, pause and surface as
-  `needs-decision`.
-- **Don't gold-plate.** Stylistic preferences are not challenges.
-- **Code changes are surfaced, never auto-applied.** Even in
-  `--auto`.
-- **Edits to L1/L2 always require Q&A.** `--auto` flags them and
-  best-guesses one of the safer resolutions but doesn't write.
-- **Never** `git reset --hard`, `--no-verify`, `--no-gpg-sign`,
-  force-push.
-- **Do not modify any file during Steps 1–5.** Modifications are
-  allowed only in Step 6 (foldback), and only after the user picks
-  a non-stop option or the finding is unambiguously auto-foldback.
-- **Be honest about scope.** If the design is fine for prototype but
+- **State each challenge in its strongest form;** let the user soften
+  it if they want.
+- **Drop what you can't cite.** If you can't cite, it's a hunch —
+  drop it or downgrade to `low` and label `weak-evidence`.
+- **Gate, don't rewrite.** This is a quality gate. If you find yourself
+  re-authoring the work, pause and surface as `needs-decision`.
+  Stylistic preferences are not challenges.
+- **Modify nothing during Steps 1–5.** Edits happen only in Step 6
+  (foldback), and only after the user picks a non-stop option or the
+  finding is unambiguously `auto-foldback`.
+- **Git safety:** never `git reset --hard`, `--no-verify`,
+  `--no-gpg-sign`, or force-push.
+- **Be honest about scope.** If the design is fine for a prototype but
   won't survive 10× growth, say both.
-- **If a finding requires fixing across many files, name them all**
-  so the user can do the change in one pass.
+- **Name every file** a cross-cutting fix would touch, so the user can
+  do the change in one pass.
 - **Audit-foldback specifically:** before applying a security fix,
   verify the cited `file:line` still matches what the report
   described. Code may have moved. If line drift is small, re-locate;
@@ -686,7 +738,10 @@ recommendations. See Step 6d for shape. -->
 ## `--auto` mode
 
 Same flow, but Step 6b (Q&A) is replaced with best-guess resolution +
-flag. Use when:
+`auto-decided` flag. Every safety invariant **S1–S4** holds unchanged
+(findings doc committed first, so `git revert` always restores;
+per-scope commits; code never auto-applies; L1/L2 needs explicit
+accept). Use when:
 
 - Doing a periodic drift sweep and expecting well-bounded findings.
 - A previous run on the same scope produced clean results.
@@ -694,26 +749,18 @@ flag. Use when:
 Don't use when:
 
 - A new design doc just landed (volatile state).
-- You expect findings to touch L1/L2 (those still pause for Q&A
-  regardless of `--auto`; the user won't enjoy a string of forced
-  prompts during what they thought was an unattended run).
-
-Safety in `--auto`:
-
-- Findings doc is written and committed first, so `git revert` always
-  restores.
-- Per-scope commits preserved.
-- Code changes still never auto-apply.
-- L1/L2 changes still need explicit accept.
+- You expect findings to touch L1/L2 — those still pause for Q&A
+  regardless of `--auto`, and the user won't enjoy a string of forced
+  prompts during what they thought was an unattended run.
 
 ---
 
 ## Cancellation
 
 - If the user types anything during Steps 5–6 *before* the findings
-  doc commit lands, treat as cancel — stop after in-memory analysis
-  but before any commit. State: "Cancelled before findings doc
-  committed. No changes made."
+  doc commit lands (S1), treat as cancel — stop after in-memory
+  analysis but before any commit. State: "Cancelled before findings
+  doc committed. No changes made."
 - If the user types during Q&A: treat that input as the answer to the
   current question, OR (if clearly not an answer) treat as `skip` for
   the current finding and continue.
@@ -763,11 +810,10 @@ this command runs. Wrappers typically override:
 - **Target type** — force a type even if auto-detect would pick
   another (e.g., always `agent-spec`).
 - **Output path** — force a project-specific location.
-- **Baseline reference systems** — replace or extend the default
-  list for the chosen type (e.g., add a named product as direct
-  prior art).
+- **Baseline reference systems** — replace or extend a playbook's
+  reference list (e.g., add a named product as direct prior art).
 - **Reviewer questions** — append project-specific consistency
-  questions to Agent A's prompt.
+  questions to a playbook's Agent A adds.
 - **Foldback constraints** — e.g., "never edit files under
   `vendor/*.py`", "`.env` changes must go through the directive
   playbook, not direct writes".
