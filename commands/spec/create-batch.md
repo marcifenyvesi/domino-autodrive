@@ -39,18 +39,29 @@ tasks: []                 # ordered TASK IDs — fill in as you author them
 ---
 ```
 
-Body: a short prose description of the layer, its boundaries, and the
-`traceback` block (left empty until the batch is `done`, then filled with the
-commit range + audit verdict + test baseline).
+## Body (markdown)
+
+```markdown
+# <NNN-layer-slug> — <layer title>
+
+<1–3 sentences: what this layer implements, its boundaries, and why it lands in
+this order relative to the other batches.>
+
+## Traceback
+<!-- left empty until the batch is `done`; then fill: -->
+- commit range: <first-sha>..<last-sha>
+- audit verdict: <pass | pass-with-notes | fail → how resolved>
+- test baseline: <suite result at close>
+```
 
 ## Rules
 
-1. `batch` MUST equal the directory name.
-2. `depends_on[]` across all batches MUST form a DAG (no cycles).
-3. `design_refs[]` must cite IDs that exist in the design docs.
-4. `tasks[]` is an *ordered* list; `/autodrive` implements them in order subject
-   to each task's own `depends_on[]`.
-5. Set `state: pending` for a new batch.
+Constraints the template comments don't already carry:
+
+1. `depends_on[]` across **all** batches MUST form a DAG (no cycles).
+2. `design_refs[]` must cite requirement IDs that **exist** in the design docs.
+3. `tasks[]` is *ordered*; `/autodrive` implements them in order, subject to each
+   task's own `depends_on[]`.
 
 ## Output
 

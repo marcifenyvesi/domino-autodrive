@@ -61,16 +61,18 @@ design_refs: [SPEC-S2.3, PRD-R7]   # numbered requirements (addressable)
 
 ## Rules
 
-1. Every `acceptance[]` item **traces** to a real numbered requirement ID — this
-   is what makes the ledger's commit→requirement traceback work.
-2. `scope[]` lists repo-relative POSIX paths (no `..`, no absolute paths). Keep
-   it tight: the loop will refuse writes outside it.
-3. **Test files belong in `scope[]`** (the implementer writes them), but any
-   change to a test file is diff-flagged to the audit gate.
-4. `depends_on[]` across all TASKs MUST form a DAG.
-5. `state: todo` for a new task.
-6. Tests must follow `STANDARDS.md` §5 — one per acceptance criterion, exact
-   assertions; on failure the implementer fixes the **code**, not the test.
+Constraints the template above can't show (the template's inline comments are
+the source of truth for the rest — don't restate them here):
+
+1. Every `acceptance[]` item **traces** to a numbered requirement ID that
+   **exists** in the design docs — this drives the ledger's commit→requirement
+   traceback.
+2. `scope[]` paths are repo-relative POSIX — no `..`, no absolute paths.
+3. A test file goes in `scope[]`, but any change to one is **diff-flagged to the
+   audit gate**.
+4. `depends_on[]` across **all** TASKs (repo-wide, not just this batch) MUST form
+   a DAG.
+5. Tests follow `STANDARDS.md` §5.
 
 ## Output
 
