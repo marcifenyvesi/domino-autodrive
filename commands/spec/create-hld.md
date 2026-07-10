@@ -10,6 +10,18 @@ The HLD is the second of the golden five (PRD → **HLD** → ARCH → SPEC → 
 stays conceptual: bounded contexts, subsystems, and high-level flows — no
 concrete technology choices (those belong in ARCH).
 
+## Boundary (what belongs here — strictly)
+
+- **Belongs here:** conceptual structure — bounded contexts, subsystems, and
+  **system-level** flows, captured as decisions (`HLD-D`). Responsibility
+  boundaries only.
+- **Does NOT belong here:** concrete technology, stores, protocols, or named
+  modules / files (→ ARCH); a user's click-path across screens (→ UI).
+- **Decidable test:** it names a technology / library / protocol / file / class
+  → ARCH, not HLD. A human performs steps on screens → a UI flow, not an HLD flow.
+- **One fact, one doc:** cite the `PRD-R…` a decision serves (`trace[]`); never
+  restate the requirement's text.
+
 ## Convention
 
 - File: `docs/design/HLD.md`.
@@ -26,7 +38,7 @@ concrete technology choices (those belong in ARCH).
 
 ```markdown
 ---
-status: draft
+status: draft            # → ratified only after /challenge converges
 ---
 # HLD
 
@@ -46,11 +58,9 @@ End-to-end conceptual flows (the happy path + the key alternates).
 
 ## Rules
 
-1. Keep it conceptual — no concrete tech, stores, or protocols (that is ARCH).
-2. Every `HLD-D<n>` states a decision and **traces up** to a `PRD-R…` it serves.
-3. Every context/subsystem/flow is anchored by at least one `HLD-D<n>`; flag any
-   `PRD-R…` this HLD does not yet cover (a gap to resolve before ratifying).
-4. Set `status: draft`; it becomes `ratified` only after `/challenge` converges.
+1. Every `HLD-D<n>` states one decision and **traces up** to a `PRD-R…` it serves.
+2. Every context / subsystem / flow is anchored by at least one `HLD-D<n>`; flag
+   any `PRD-R…` this HLD doesn't yet cover (a gap to resolve before ratifying).
 
 ## Output
 

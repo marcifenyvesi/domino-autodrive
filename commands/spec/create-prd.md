@@ -10,6 +10,23 @@ The PRD is the first of the golden five (**PRD** → HLD → ARCH → SPEC → U
 names the product's intent — who it's for, where it runs, and the numbered
 requirements everything downstream traces to.
 
+## Boundary (what belongs here — strictly)
+
+- **Belongs here:** product intent — the Context Profile (who / where / scale)
+  and **product-observable, solution-agnostic** requirements (`PRD-R`, black-box:
+  "a user can reset their password").
+- **Real-world bond:** the UI doc is this PRD's manifestation — the other end of
+  the V. A `PRD-R` with a user-facing surface is only *realized* once a `UI-U`
+  manifests it (the UI doc flags the uncovered ones).
+- **Does NOT belong here:** internal structure, technology, modules, or
+  component-level behaviour (→ HLD / ARCH / SPEC). A requirement that names an
+  internal part or a testable component behaviour is a `SPEC-S`, not a `PRD-R`.
+- **Decidable test:** only a user / operator can observe it as product behaviour
+  → `PRD-R`. It names or implies an internal module, interface, or technology →
+  it belongs downstream.
+- **One fact, one doc:** downstream docs **cite** these `PRD-R` IDs (`trace[]`);
+  they never copy the requirement text.
+
 ## Convention
 
 - File: `docs/design/PRD.md`.
@@ -25,7 +42,7 @@ requirements everything downstream traces to.
 
 ```markdown
 ---
-status: draft
+status: draft            # → ratified only after /challenge converges
 ---
 # PRD
 
@@ -46,13 +63,12 @@ status: draft
 ## Rules
 
 1. The **Context Profile** is present and concrete — persona, deployment target,
-   userbase size, and scaling horizon are all filled in (they steer /challenge
-   and /revise-design).
-2. Every requirement has a `PRD-R<n>` id and a **testable** statement ("the
-   system SHALL …"), not a vibe.
-3. Requirements are the sole downstream anchor — no goal or persona detail that a
-   requirement does not capture is load-bearing.
-4. Set `status: draft`; it becomes `ratified` only after `/challenge` converges.
+   userbase size, and scaling horizon all filled in (they steer /challenge and
+   /revise-design).
+2. Every requirement has a `PRD-R<n>` id and a **testable** "SHALL" statement,
+   not a vibe.
+3. Requirements are the sole downstream anchor — no goal or persona detail a
+   requirement doesn't capture is load-bearing.
 
 ## Output
 

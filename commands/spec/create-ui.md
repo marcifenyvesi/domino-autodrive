@@ -1,7 +1,7 @@
 ---
 description: Author the UI document — the fifth golden design doc (UI/UX contract) for the Dynamic Traceback Harness, with numbered, testable UI requirements that Playwright gates against.
 argument-hint: [feature or screen scope]
-allowed-tools: Read, Glob, Grep, Write, Edit
+allowed-tools: Read, Glob, Grep, Write, Edit(docs/design/**)
 ---
 
 # /spec/create-ui — author the UI doc
@@ -10,6 +10,23 @@ The UI doc is the fifth of the golden five (PRD → HLD → ARCH → SPEC → **
 is the UI/UX contract: the screens, states, flows, and acceptance behaviour that
 the front-end implements and that the **Playwright audit gate**
 verifies.
+
+## Boundary (what belongs here — strictly)
+
+- **Belongs here:** the UI/UX contract — screens, states, interaction flows, and
+  **browser-observable** requirements (`UI-U#.#`), each with a Playwright
+  assertion where it's visible in a browser.
+- **Real-world bond:** UI is the **manifestation** end of the V — the same user
+  capabilities the PRD stated as intent, now embodied on screen. That makes the
+  `PRD-R` link primary and the `SPEC-S` link a supporting binding (mechanics:
+  Rule 3).
+- **Does NOT belong here:** behaviour asserted below the UI, i.e. API / unit
+  (→ SPEC); system-level data / control flows (→ HLD); product intent (→ PRD).
+- **Decidable test:** only a browser can observe it (DOM / visual / interaction)
+  → `UI-U`. An API / unit test can assert it → `SPEC-S`. It's the user's
+  click-path across screens → a UI flow; components exchanging data → an HLD flow.
+- **One fact, one doc:** cite the `PRD-R…` / `SPEC-S…` (`trace[]`); never restate
+  their text.
 
 ## Convention
 
@@ -28,7 +45,7 @@ verifies.
 
 ```markdown
 ---
-status: draft
+status: draft            # → ratified only after /challenge converges
 ---
 # UI
 
@@ -43,7 +60,7 @@ error / populated), and the SPEC contracts it binds to.
 End-to-end interaction flows (the happy path + the key error paths).
 
 ## UI requirements (numbered, testable)
-- UI-U1.1: <when X, the system SHALL show Y>   (traces PRD-R…, SPEC-S…)
+- UI-U1.1: <when X, the system SHALL show Y>   (manifests PRD-R… ; binds SPEC-S…)
 - UI-U1.2: ...
 
 ## Accessibility & responsiveness
@@ -58,14 +75,16 @@ drives.
 ## Rules
 
 1. Every `UI-U<n>.<m>` is **testable** ("the system SHALL …"), not a vibe.
-2. Requirements with a browser-observable effect get a **Playwright contract**
-   entry so the audit gate can assert them.
-3. Trace each UI requirement up to a `PRD-R…` and/or `SPEC-S…` where it derives
-   from one.
-4. Set `status: draft`; it becomes `ratified` only after `/challenge` converges.
+2. Every requirement with a browser-observable effect gets a **Playwright
+   contract** entry so the audit gate can assert it.
+3. Each `UI-U` **manifests** a `PRD-R…` (primary — the user capability it
+   realizes) and **binds to** the `SPEC-S…` it consumes (secondary). Exception:
+   derived-state requirements (loading / empty / error) manifest no PRD
+   capability — they express a `SPEC-S` reality, so trace SPEC-first. Flag any
+   `PRD-R…` with a user surface this doc doesn't yet manifest (a gap to resolve
+   before ratifying).
 
 ## Output
 
 Write `docs/design/UI.md`, list the `UI-U…` IDs created and what each traces to,
-and flag any PRD requirement with UI implications that the UI doc does not yet
-cover (a gap to resolve before ratifying).
+and summarize the screens, states, and Playwright-covered requirements for review.

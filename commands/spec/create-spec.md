@@ -10,6 +10,20 @@ The SPEC is the fourth of the golden five (PRD → HLD → ARCH → **SPEC** →
 is the contract layer: the precise, testable acceptance statements that TASK
 acceptance criteria `trace[]` to and that implementation is verified against.
 
+## Boundary (what belongs here — strictly)
+
+- **Belongs here:** **behavioural** acceptance — testable pass/fail statements
+  (`SPEC-S#.#`) traced to an `ARCH-M`, plus the edge / error behaviour they must
+  cover. The contract layer.
+- **Does NOT belong here:** product intent (→ PRD); structural shapes / protocols
+  (→ ARCH); anything asserted through the rendered UI (→ UI).
+- **Decidable test:** an API / unit / integration test can assert it → `SPEC-S`.
+  Only a browser can observe it (DOM / visual) → `UI-U`. It's a shape with no
+  pass/fail → ARCH. (A latency / scale **threshold** is a `SPEC-S` tracing to the
+  `PRD-R` that set the target.)
+- **One fact, one doc:** cite the `ARCH-M…` / `PRD-R…` (`trace[]`); never restate
+  their text.
+
 ## Convention
 
 - File: `docs/design/SPEC.md`.
@@ -27,7 +41,7 @@ acceptance criteria `trace[]` to and that implementation is verified against.
 
 ```markdown
 ---
-status: draft
+status: draft            # → ratified only after /challenge converges
 ---
 # SPEC
 
@@ -49,8 +63,7 @@ The failure paths and boundary conditions the statements above must cover.
    SHALL …") — precise enough that a test can pass or fail on it, not a vibe.
 2. Each statement **traces up** to an `ARCH-M…` (and the `PRD-R…` it serves).
 3. Error and boundary behaviour is specified, not just the happy path; flag any
-   `ARCH-M…` this SPEC does not yet cover (a gap to resolve before ratifying).
-4. Set `status: draft`; it becomes `ratified` only after `/challenge` converges.
+   `ARCH-M…` this SPEC doesn't yet cover (a gap to resolve before ratifying).
 
 ## Output
 

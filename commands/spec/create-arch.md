@@ -10,6 +10,18 @@ The ARCH is the third of the golden five (PRD → HLD → **ARCH** → SPEC → 
 is where technology choices live: concrete modules, data stores, interfaces, and
 the tech that implements the HLD's conceptual design.
 
+## Boundary (what belongs here — strictly)
+
+- **Belongs here:** the concrete realization — named modules (`ARCH-M`), data
+  stores, **structural** interfaces (protocol + direction + shape), and the tech
+  stack, each with a reason.
+- **Does NOT belong here:** conceptual responsibility with no technology (→ HLD);
+  a behavioural pass/fail guarantee (→ SPEC).
+- **Decidable test:** a shape / signature / protocol → an ARCH interface. A
+  pass/fail behaviour a test asserts → a `SPEC-S`, not ARCH.
+- **One fact, one doc:** cite the `HLD-D…` a module realizes (`trace[]`); never
+  restate the decision's text.
+
 ## Convention
 
 - File: `docs/design/ARCH.md`.
@@ -27,7 +39,7 @@ the tech that implements the HLD's conceptual design.
 
 ```markdown
 ---
-status: draft
+status: draft            # → ratified only after /challenge converges
 ---
 # ARCH
 
@@ -51,9 +63,8 @@ The stack, with a one-line justification per choice.
 1. Name concrete tech — every store, interface, and stack choice is a real,
    named technology with a reason (not "a database").
 2. Every `ARCH-M<n>` states a module and **traces up** to an `HLD-D…` it realizes.
-3. Interfaces reference only modules/stores defined in this doc; flag any
-   `HLD-D…` this ARCH does not yet realize (a gap to resolve before ratifying).
-4. Set `status: draft`; it becomes `ratified` only after `/challenge` converges.
+3. Interfaces reference only modules / stores defined in this doc; flag any
+   `HLD-D…` this ARCH doesn't yet realize (a gap to resolve before ratifying).
 
 ## Output
 
