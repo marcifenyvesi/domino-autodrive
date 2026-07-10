@@ -141,7 +141,7 @@ If the engine isn't present yet (fresh clone of the global tools), copy it from
 
 6. **Audit**.
    - **Code-quality** every task: `code-review` skill on the diff.
-   - **Security** risk-tiered: run `security-review` / `dev-security` only when
+   - **Security** risk-tiered: run the built-in `security-review` only when
      the batch is `security: true` or the diff touches an
      `audit.security_surface` path; always run a per-batch sweep at batch close.
    - **Playwright** for webapp UI tasks: drive the UI doc's contract per
