@@ -1,6 +1,6 @@
 ---
 description: Stress-test a target (specs, architecture, audit report, design doc, a diff of AI-authored work, or a whole repo) for internal consistency and against industry-standard prior art, then optionally fold accepted recommendations back into the underlying code/specs. Adaptive — target type, reference systems, and reviewer questions are picked from what's detected. Project wrappers can override defaults.
-argument-hint: [<path|glob|git-ref>] | [--report <path>] | [--auto] | [--since <ref>] | [--staged] | [reference systems to add, space-separated]
+argument-hint: [<path|glob|git-ref>] | [--report <path>] | [--auto] | [--round <k>/<n>] | [--since <ref>] | [--staged] | [reference systems to add, space-separated]
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Write, Edit, Bash, PowerShell, Agent, AskUserQuestion
 ---
 
@@ -32,6 +32,29 @@ this command runs — honor any defaults they pass.
 - **`--auto`** — skip Q&A for ambiguous findings; best-guess the
   conservative option and flag with `auto-decided`. See the `--auto`
   section; the safety invariants (below) hold unchanged.
+- **`--round <k>/<n>`** — *blind-round mode.* This invocation is round
+  `k` of `n` in an **independent, blind** set (the split proven in
+  `/review-with-fable` + `-comparison`). Four gated differences from the
+  default flow, all additive:
+  1. **Deterministic doc name** — Step 0 writes to
+     `reviews/<DATE>-challenge-r<k>.md` (not the `-2`/`-3` collision
+     suffix), so parallel rounds never collide and the adjudicator can
+     glob them.
+  2. **Blind by construction** — the reviewer is handed only the target
+     + `scope[]` + `STANDARDS.md`, and **MUST NOT** `Read`/`Grep` any
+     sibling round doc `reviews/<DATE>-challenge-r*.md` or the
+     adjudication doc (see Step 1's blind-round invariant).
+  3. **Single-reviewer** — Step 2's Agent A / Agents B+ fan-out is
+     **suppressed**; the consistency + reference analysis runs inline, so
+     a round can run inside a fresh subagent without nested
+     agent-spawning.
+  4. **No foldback** — the round stops after committing its findings doc
+     (Steps 1–5) and performs no Step 6 foldback; the
+     `challenge-adjudicate` skill owns foldback off the adjudicated
+     `CONFIRMED` set.
+  Isolation (a fresh subagent per round) is the enforcement; the flag is
+  only the label. See `skills/challenge-adjudicate/SKILL.md` for the
+  adjudication step that consumes the `r<k>` docs.
 - **diff modes** — `--since <ref>`, `--staged`, a git ref, or a single
   file path resolves the target to a diff (AI-work-check angle). If
   the resolved change set is empty, report "nothing to challenge" and
@@ -120,6 +143,13 @@ they pull in `STANDARDS.md` (Step 1, and their playbook rows).
 
 Create the directory if missing. If a file with the same name exists,
 append `-2`, `-3`, etc.
+
+**In `--round <k>/<n>` mode**, override the filename with a
+**deterministic** per-round name instead: `reviews/<DATE>-challenge-r<k>.md`
+(e.g. round 2 → `reviews/<DATE>-challenge-r2.md`). Do **not** apply the
+`-2`/`-3` collision suffix — the `r<k>` name is stable by design so
+parallel rounds land at distinct, predictable paths the
+`challenge-adjudicate` skill can glob as `reviews/<DATE>-challenge-r*.md`.
 
 **For `ai-work-diff` mode**, the report may be short enough to print to
 chat instead — see Step 7 ("Report" guidance for that mode).
@@ -326,11 +356,34 @@ Tag each blast-radius artifact:
 Cap the blast radius if it gets unwieldy: focus on cross-level pairs
 first (highest-yield findings).
 
+**Blind-round invariant (`--round` mode).** Step 1 does not itself pull
+`reviews/` into the blast radius — `reviews/` is only L6 "prior findings"
+in the Hierarchy-of-truth table and the no-args auto-detect list. In
+`--round` mode this becomes a hard **guardrail**: the reviewer is handed
+only the target + `scope[]` + `STANDARDS.md` and **MUST NOT** `Read` or
+`Grep` any sibling round doc `reviews/<DATE>-challenge-r*.md` (nor the
+`reviews/<DATE>-challenge-adjudication.md`). A round is **blind by
+construction** — the isolation of a fresh subagent per round is the
+enforcement, and this clause just forbids the subagent from seeking its
+siblings out. The `--round` flag is only the label; it changes nothing
+about what the round *finds*, only that it may not import another round's
+findings.
+
 ---
 
 ## Step 2 — Spawn agents in parallel
 
 Send a single message with multiple `Agent` tool calls.
+
+**In `--round <k>/<n>` mode, run single-reviewer — do not spawn.** The
+Agent A / Agents B+ fan-out below is **suppressed**; instead do the
+internal-consistency audit (Agent A's common spine + the detected type's
+"Agent A adds" questions) and the reference analysis (the type's Agent B
+dimensions) **inline, in this same context**, producing the same `F-NN`
+findings. This is what lets a caller run a round *inside* a fresh
+subagent without nested agent-spawning (subagents cannot spawn
+subagents). The multi-agent fan-out remains the **default** (non-`--round`)
+behaviour and is unchanged below.
 
 ### Agent A — Internal consistency reviewer
 
@@ -470,6 +523,13 @@ instead unless the user asked for a file.
 After the report is saved, offer to fold accepted recommendations
 back. **Behavior depends on mode:**
 
+- **`--round <k>/<n>` mode: no foldback.** The round **stops after
+  committing its findings doc (Steps 1–5) and performs no foldback** —
+  skip Steps 6a–6d entirely. Safety invariant **S1** (findings doc
+  committed first) still holds; the round simply ends there. Foldback is
+  owned by the `challenge-adjudicate` skill, which folds back **once**
+  off the adjudicated `CONFIRMED` set (across the `r<k>` rounds) via this
+  same Step 6 machinery — so no single round edits the tree.
 - **Default mode:** foldback edits the target files.
 - **Audit-foldback (`--report <path>`):** foldback edits the
   *audited code* identified in Step 0, not the report. Append a
@@ -779,11 +839,21 @@ Don't use when:
 
 ## Convergence test
 
-After a full `/challenge` pass, a second invocation on the same git
-state should produce zero findings. If it doesn't, the missing
-findings from the first pass are themselves worth flagging — the
-command got the work done but the gating logic missed something. Note
-this in the report when it happens.
+Convergence is a **post-foldback independent round**: after the
+adjudicated `CONFIRMED` findings have been folded back once, a fresh
+**blind** `/challenge --round` on the resulting git state should yield
+**zero `CONFIRMED`** findings. That confirming round is what the callers
+actually run — `/autodrive` Step 3 and `/domino` Phases 1/2/4 — not a
+prose definition inside this command. Zero `CONFIRMED` ⇒ converged; a
+non-empty `CONFIRMED` set means the fold left real drift and needs
+another bounded fold (or `needs-human`).
+
+Cross-round contradictions are **settled against the tree** by
+`skills/challenge-adjudicate/SKILL.md` (a `conflict`-tier verdict that
+reads the disputed anchor and names the erring round) — `/challenge`
+itself no longer detects "oscillation" or freezes on a reversal. See
+that skill for the full multi-round flow: N independent blind rounds →
+one adjudication → a single foldback off `CONFIRMED` issues only.
 
 ---
 

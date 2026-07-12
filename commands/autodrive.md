@@ -92,18 +92,56 @@ If the engine isn't present yet (fresh clone of the global tools), copy it from
 2. **Pick work.** `python3 "$ENGINE" next-task` → `{task, batch, scope, …}` or
    `{}`. Empty → all ready work done → go to **Wrap-up**.
 
-3. **Challenge gate**. Run the challenge wrapper on the
-   task doc, **≥2 passes** (3 if the batch is `complexity: high`):
-   - Use the `challenge` skill / `/challenge` on `docs/batches/<batch>/tasks/<task>.md`.
-   - Stop early when a pass yields zero net findings (converged) or only NIT
-     re-litigation. If pass N reverses pass N−1 (oscillation), freeze and
-     `set-state --to needs-human`; continue with other ready tasks.
-   - **Router priority:** prefer fixing the *task*. If the gate concludes a
-     **design doc** must change → **bounded self-ratify**: apply
-     only annotation-level clarifications that don't touch a numbered
+3. **Challenge gate** — **N independent blind rounds → adjudicate → fold once →
+   one post-foldback confirming round** (the split proven in `/review-with-fable`
+   + `-comparison`, applied to `/challenge`). Not sequential convergence: no round
+   ever reads another round's findings.
+
+   - **Fan out N blind rounds.** N = `.harness.yaml challenge.min_passes`
+     (`complex_passes` when the batch is `complexity: high` — so `complexity: high`
+     still buys a third *round*, now independent, not a third convergence pass).
+     Spawn **N fresh `Agent` subagents** on `docs/batches/<batch>/tasks/<task>.md`,
+     one per round `k` in `1..N`. Each subagent is handed **only** the task doc +
+     its `scope[]` + **the full text of `STANDARDS.md` inlined** — **never** a
+     sibling round's output. A **fresh subagent per round is what makes the rounds
+     blind**: isolation is the enforcement, so a round cannot narrow to "what's
+     left" or treat a sibling's findings as settled.
+   - **Round execution model (single-reviewer, no nesting).** Each round subagent
+     invokes `/challenge --round <k>/<N>` on the task doc. `--round` mode is
+     **single-reviewer**: it **suppresses** `/challenge`'s Step-2 Agent fan-out
+     (Agent A + Agents B+) and runs the consistency + reference analysis inline,
+     writing `reviews/<DATE>-challenge-r<k>.md` directly. This is required because
+     subagents do **not** nest — a round that ran the full multi-agent `/challenge`
+     inside a subagent would try to spawn further subagents and could not run. The
+     `--round` invocation performs **no foldback** (it stops after committing its
+     findings doc); foldback is the adjudicator's job. The heavier
+     `challenge-adjudicate` step below runs **top-level**, not inside a round
+     subagent.
+   - **Adjudicate + fold once.** After the rounds return, run the
+     **`challenge-adjudicate` skill** over `reviews/<DATE>-challenge-r*.md`. It
+     builds the union matrix, gives each union issue exactly one verdict
+     (`CONFIRMED` / `REFUTED` / `STALE` / `UNVERIFIABLE-STATIC`) with a cited
+     reproduction step, settles cross-round contradictions **against the tree** (a
+     `conflict` tier — this replaces the old oscillation rule), and folds back
+     **once** off **`CONFIRMED`** issues only, preserving `/challenge`'s S1–S4
+     safety invariants (findings doc committed before any edit; code never
+     auto-applied; L1/L2 edits gated; per-scope commits).
+   - **Post-foldback convergence check (run it, don't just define it).** After the
+     single foldback, run **one** additional post-foldback blind round on the same
+     task doc (a fresh subagent, `/challenge --round`, same isolation). **Zero
+     `CONFIRMED`** ⇒ converged. A non-empty `CONFIRMED` set ⇒ fold that residue
+     **once more** (bounded to one extra cycle, matching the retry-cap discipline);
+     if `CONFIRMED` is still non-empty after that one extra fold →
+     `python3 "$ENGINE" set-state --task <id> --to needs-human`, yield this task,
+     continue other ready tasks.
+   - **Router priority:** prefer fixing the *task*. If an adjudicated `CONFIRMED`
+     finding requires an **L1 design change** — or the adjudicator surfaces an
+     issue it cannot settle against the tree — route via **bounded self-ratify**:
+     apply only annotation-level clarifications that don't touch a numbered
      requirement, a contract, or any `scope[]`; otherwise `set-state --to
      needs-human`, yield this task, continue others.
-   - On success: `python3 "$ENGINE" set-state --task <id> --to challenged`.
+   - On a clean, converged adjudication (zero post-foldback `CONFIRMED`):
+     `python3 "$ENGINE" set-state --task <id> --to challenged`.
 
 4. **Branch + implement.**
    - `python3 "$ENGINE" set-state --task <id> --to in-progress --branch task/<id>`
