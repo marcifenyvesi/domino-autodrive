@@ -344,6 +344,7 @@ prompt ─▶ TRIAGE ┬─ in-flight ──▶ resume ────────�
                  ├─ delta ──────▶ research(new) ▸ author+challenge delta ────────────┤
                  └─ greenfield ─▶ research ▸ challenge×N-blind ▸ adjudicate (verify) │
                                  ▸ design gate ▸ [challenge×N-blind ▸ adjudicate,     │
+                                                  iff drift]                          │
                                  ▸ author batches+tasks                               │
                                  ▸ challenge×N-blind ▸ adjudicate ▸ post-fold round ──┤
                                                                                      ▼
