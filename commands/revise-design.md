@@ -47,7 +47,10 @@ change/add/remove, and why, traced to the research findings. Keep it minimal —
 change the design, not the prose around it.
 
 ### Step 4 — challenge the revision (mandatory)
-Run `/challenge` on the revised design doc (≥2 passes). The research doc is a
+Run the challenge gate on the revised design doc as **N independent blind rounds
+→ adjudicate → fold once** (N = `.harness.yaml challenge.min_passes`): fan out
+fresh subagents each running `/challenge --round <k>/<N>`, then the
+`challenge-adjudicate` skill folds `CONFIRMED` findings once. The research doc is a
 reference; the **PRD remains north star**. Fold accepted findings.
 - If the revision contradicts a higher doc (e.g. a SPEC change violating an HLD
   decision), the conflict surfaces — resolve upward or abandon the change.

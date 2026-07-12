@@ -15,9 +15,13 @@ paths:                      # where the doc-tree lives (defaults shown)
   standards: STANDARDS.md
 
 challenge:
-  min_passes: 2             # mandatory passes per artifact
-  complex_passes: 3         # used when a BATCH has complexity: high
-  # convergence + oscillation guards are always on
+  min_passes: 2             # number of INDEPENDENT BLIND rounds per artifact
+  complex_passes: 3         # rounds used when a BATCH has complexity: high
+  # Rounds are independent (fresh subagent each, blind to siblings), then
+  # adjudicated into one findings doc via the challenge-adjudicate skill.
+  # Guards: post-foldback convergence check (a fresh blind round yields zero
+  # CONFIRMED) + cross-round conflicts settled against the tree (this
+  # replaces the old oscillation-freeze rule).
 
 loop:
   retry_cap: 3              # implement/test retries before revert/block

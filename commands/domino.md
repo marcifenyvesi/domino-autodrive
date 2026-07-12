@@ -119,15 +119,27 @@ increment, rather than skip work).
 2. Synthesize a cited report → `docs/research/<DATE>-<topic>.md`. Every load-bearing
    finding carries a **source URL** and a "transferable? yes / no / later + why" verdict.
    End with a "recommended minimal extension" and an explicit "defer / out-of-scope" list.
-3. **Adversarially verify the research ×2 against independent sources.** This is not a
-   built-in "vs web" `/challenge` mode — `/challenge` on a `general-docs` target has no
-   external baseline by default. Domino performs the second-source verification itself:
-   invoke `/challenge` on the research doc **passing the key domains as explicit reference
-   systems** (`/challenge docs/research/<file>.md <source-a> <source-b> …`) and/or run an
-   adversarial-verify sub-pass that **re-fetches independent sources** and confirms/refutes
-   each load-bearing claim. A premise the second source overturns is a finding, not a
-   footnote — autofold corrections into the research doc. Run this twice; converge
-   (pass 2 → zero new corrections).
+3. **Adversarially verify the research against independent sources — N independent blind
+   rounds → adjudicate → fold once.** This is not a built-in "vs web" `/challenge` mode —
+   `/challenge` on a `general-docs` target has no external baseline by default, so domino
+   performs the second-source verification itself. Fan out **N fresh `Agent` subagents**
+   (N = `.harness.yaml challenge.min_passes`, `complex_passes` when the batch is
+   `complexity: high`), one per round `k` in `1..N`, each handed **only** the research doc +
+   `STANDARDS.md` — **never** a sibling round's findings; a fresh subagent per round is what
+   makes the rounds blind. Each round invokes **single-reviewer** `/challenge --round <k>/<N>`
+   on the research doc **passing the key domains as explicit reference systems**
+   (`/challenge --round <k>/<N> docs/research/<file>.md <source-a> <source-b> …`) — single-
+   reviewer suppresses `/challenge`'s Step-2 Agent fan-out so the round runs inside the
+   subagent without nesting, **re-fetches independent sources**, confirms/refutes each load-
+   bearing claim, and writes `reviews/<DATE>-challenge-r<k>.md` with **no** foldback. A
+   premise a second source overturns is a finding, not a footnote. Then invoke the
+   **`challenge-adjudicate` skill** over `reviews/<DATE>-challenge-r*.md` (top-level, not in a
+   round subagent): union matrix, one verdict per issue (`CONFIRMED` / `REFUTED` / `STALE` /
+   `UNVERIFIABLE-STATIC`) with a cited reproduction step, cross-round contradictions settled
+   against the sources → autofold corrections into the research doc **once**, off `CONFIRMED`
+   issues only. Then run **one post-foldback blind round** (a fresh subagent, `/challenge
+   --round`, same isolation): zero `CONFIRMED` ⇒ converged/advance; otherwise one bounded
+   extra fold, else escalate.
 4. Commit the research doc + its challenge findings.
 
 ---
@@ -169,8 +181,16 @@ the *concept itself* has drifted, never for convenience. Stability gradient
    - "Cleaner" / "more convenient" / "would be nice" is NEVER a reason to touch a golden
      doc. Prefer the **smallest** change that restores coherence: extend SPEC before ARCH;
      ARCH before HLD; PRD only if the product intent itself changed (→ escalate).
-   - Keep every doc internally consistent and traced upward after the edit; run `/challenge`
-     ×2 to confirm the design is coherent (converge → zero findings).
+   - Keep every doc internally consistent and traced upward after the edit; confirm the
+     design is coherent with **N independent blind rounds → adjudicate → fold once**: fan out
+     N fresh `Agent` subagents (N per `min_passes` / `complex_passes`), each running single-
+     reviewer `/challenge --round <k>/<N>` on the design docs in its own subagent (no Step-2
+     fan-out, no nesting) and writing `reviews/<DATE>-challenge-r<k>.md` with no foldback;
+     then the **`challenge-adjudicate` skill** (top-level) folds `CONFIRMED` findings **once**,
+     followed by **one post-foldback blind round** (zero `CONFIRMED` ⇒ coherent; else one
+     bounded extra fold, else escalate). Adjudication still folds **downward only** and still
+     **never auto-applies an L1 golden-doc edit** — the fold-direction gate from item 2 above
+     is unchanged; golden-doc changes stay gated behind domino's own authoring bar.
 3. If no change is warranted, **say so plainly** and proceed on the existing skeleton.
 4. Commit any design change (+ its challenge findings) before authoring tasks.
 
@@ -204,13 +224,41 @@ needs (`/spec/create-batch`, `/spec/create-task` conventions):
 
 ## Phase 4 — Challenge the tasks
 
-Run **`/challenge` ×2–3** on the task set with autofoldback (target = the task mds;
-reference = the design + the shipped code). Catch: drift from the design, coverage gaps
-(every requirement owned exactly once), scope overlaps lacking a `depends_on` edge, DAG
-cycles, and **infeasibility against the real code** (does the task cite symbols/paths
-that actually exist?). Fold findings **into the tasks** — tasks are L5, they yield to the
-L1 design; never fold a task problem upward into a golden doc. Iterate until a pass yields
-zero findings (convergence). Commit findings + foldback per pass.
+Run the challenge gate as **N independent blind rounds → adjudicate → fold once → one
+post-foldback confirming round** (the split proven in `/review-with-fable` + `-comparison`,
+applied to `/challenge`) — not sequential convergence: no round ever reads another round's
+findings.
+
+- **Fan out N blind rounds.** N = `.harness.yaml challenge.min_passes` (`complex_passes`
+  when the batch is `complexity: high` — so `complexity: high` still buys a third *round*,
+  now independent, not a third convergence pass). Spawn **N fresh `Agent` subagents** over
+  the task mds, one per round `k` in `1..N`. Each subagent is handed **only** the task set +
+  the reference (the design + the shipped code) + **the full text of `STANDARDS.md`
+  inlined** — **never** a sibling round's output. A fresh subagent per round is what makes
+  the rounds blind: isolation is the enforcement, so a round cannot narrow to "what's left"
+  or treat a sibling's findings as settled.
+- **Round execution model (single-reviewer, no nesting).** Each round subagent invokes
+  `/challenge --round <k>/<N>` on the task mds. `--round` mode is **single-reviewer**: it
+  **suppresses** `/challenge`'s Step-2 Agent fan-out and runs the consistency + reference
+  analysis inline, writing `reviews/<DATE>-challenge-r<k>.md` directly — required because
+  subagents do **not** nest. It performs **no foldback** (it stops after committing its
+  findings doc). Each round catches the same defects: drift from the design, coverage gaps
+  (every requirement owned exactly once), scope overlaps lacking a `depends_on` edge, DAG
+  cycles, and **infeasibility against the real code** (does the task cite symbols/paths that
+  actually exist?).
+- **Adjudicate + fold once.** After the rounds return, run the **`challenge-adjudicate`
+  skill** (top-level, not inside a round subagent) over `reviews/<DATE>-challenge-r*.md`: it
+  builds the union matrix, gives each issue exactly one verdict (`CONFIRMED` / `REFUTED` /
+  `STALE` / `UNVERIFIABLE-STATIC`) with a cited reproduction step, settles cross-round
+  contradictions **against the tree** (a `conflict` tier), and folds back **once** off
+  **`CONFIRMED`** issues only. Fold findings **into the tasks** — tasks are L5, they yield
+  to the L1 design; never fold a task problem upward into a golden doc.
+- **Post-foldback convergence check (run it, don't just define it).** After the single
+  foldback, run **one** additional post-foldback blind round on the task set (a fresh
+  subagent, `/challenge --round`, same isolation). **Zero `CONFIRMED`** ⇒ converged. A
+  non-empty `CONFIRMED` set ⇒ fold that residue **once more** (bounded to one extra cycle);
+  if `CONFIRMED` is still non-empty after that one extra fold → mark the offending task
+  `needs-human` and continue with the other ready tasks.
 
 ---
 
@@ -294,9 +342,10 @@ prompt ─▶ TRIAGE ┬─ in-flight ──▶ resume ────────�
    (Phase 0,     ├─ implement ──▶ ready? Phase 5 │ all-done / blocked? report+STOP  │
     ordered)     ├─ conflict ───▶ design gate ▸ needs-human(that task) ▸ delta ─────┤
                  ├─ delta ──────▶ research(new) ▸ author+challenge delta ────────────┤
-                 └─ greenfield ─▶ research ▸ challenge×2 (adversarial-verify)         │
-                                 ▸ design gate ▸ [challenge×2 design, iff drift]      │
-                                 ▸ author batches+tasks ▸ challenge×2–3 ─────────────┤
+                 └─ greenfield ─▶ research ▸ challenge×N-blind ▸ adjudicate (verify) │
+                                 ▸ design gate ▸ [challenge×N-blind ▸ adjudicate,     │
+                                 ▸ author batches+tasks                               │
+                                 ▸ challenge×N-blind ▸ adjudicate ▸ post-fold round ──┤
                                                                                      ▼
                                           orchestrate: next-parallel-set ▸ claim ▸
                                           worktree ▸ ∥ subagents ▸ scope-audit ▸ merge ─▶ done
