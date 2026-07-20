@@ -132,6 +132,7 @@ measure.
 - **Design for testability:** accept dependencies rather than construct them
   inside; return results rather than mutate in place; keep the surface small — so
   the module tests through its interface without mocks (§5).
+- **The testability-alone rule.** A task that adds a module should be answerable by the deletion test in one line; a shallow pass-through introduced solely to expose a seam that nothing actually varies across is a §4.1 defect, not a neutral choice.
 
 ### 4.2. Design smells — the Fowler baseline (review-judged)
 
@@ -188,8 +189,31 @@ anything tooling already enforces**. Each reads *what it is → how to fix*:
 - **On a failing test, suspect the code under test FIRST** — the default cause of
   red is a real bug. Fix the bug.
 - **Do not edit a test to make it pass** unless it is *provably* wrong (wrong
-  expected value per the SPEC, not "inconvenient"). Any test-file change in an
-  implementation task is **diff-flagged to the audit gate**.
+  expected value per the SPEC, not "inconvenient"). Test-file changes are
+  gated by the active TDD mode:
+  - **`tdd_mode: off` (default)** — any test-file change is **diff-flagged to
+    the audit gate** (review-judged); behaviour is unchanged from the prior
+    rule.
+  - **`tdd_mode: auto`** — after the test brief freezes the test paths, any
+    change to a frozen test path is a **hard reject** at `scope_audit`
+    (content-sha mismatch); no implementer edit is permitted. The only escape
+    hatch for a provably-wrong test is to **re-run the test brief** (the task
+    is bounded → `needs-human`), not an implementer edit.
+    - **Unfrozen-impl tripwire (SPEC-S13.5.5).** Reaching the impl sub-step
+      (`tdd_phase == "impl"`) with **no** frozen tests — a skipped, mis-sequenced,
+      or empty `freeze-tests` — is itself a `scope_audit` violation
+      (`tdd-impl-without-frozen-tests`) → `needs-human`. The freeze cannot be
+      silently no-op'd to disable the content-sha check.
+    - **RED-gate limitation (SPEC-S13.3.2, best-effort).** The invalid-red
+      rejection (a bare collection error / `ImportError` is not valid red) is
+      **best-effort / pattern-based**, not runner-return-code based. A Python
+      import/collection error is caught; for an **unrecognized runner** the gate
+      degrades to **necessary-only** (exit-nonzero ⇒ red) — do **not** assume the
+      import-only rejection is universal.
+    - **Seam eligibility (SPEC-S13.9.4).** TDD mode fires **only** for a
+      brownfield-fixed-seam task or one carrying a ratified `## Contract` block; a
+      greenfield task with neither is **not** `tdd_active` (ordinary path) and its
+      exclusion is recorded as a loud claim-time ledger `finding`.
 - **Independent and deterministic** — any execution order, no shared mutable
   fixtures, no bare sleeps (poll with timeout), wrap the clock, no live network.
   In an autonomous loop the suite *is* the gate; a flaky test is a defect in the
@@ -402,7 +426,7 @@ from primary by ≥ one control's width** so "OK" muscle memory can't fire
 
 Targets the *measured* AI-generation failure modes — XSS, log injection,
 hardcoded creds, command injection, slopsquatted deps (Veracode 2025; Spracklen
-et al., §8.7). **[gated]** here greps `insecure_markers` and **routes a new match
+et al., §8.8). **[gated]** here greps `insecure_markers` and **routes a new match
 to the audit gate** with the implementer's justification (stub markers, by
 contrast, are auto-fatal); prose around the patterns is review-judged plus the
 security audit (`.harness.yaml audit.security_surface`).
@@ -489,14 +513,30 @@ security audit (`.harness.yaml audit.security_surface`).
   stdlib or an existing dep already covers is a defect — every dep is attack
   surface (§2).
 
-### 8.6. LLM boundaries (when the code calls an LLM)
+### 8.6. Canned-resolver deny — xstate actor bodies  **[gated]**
+
+Severity contract: **SPEC-S12.8.3**.
+
+- **A canned production actor is auto-fatal** — the same class as a lexical stub
+  (`stub_markers` tier). A named xstate actor logic (`fromPromise`, `fromCallback`,
+  child-machine) whose body returns/resolves a literal or constant with **no
+  external call** (network/db/fs/ipc) has no legitimate use in production code and
+  is denied unconditionally.
+- **Test/fixture paths are exempt.** A canned resolver in a `*.test.ts`,
+  `__tests__/`, or `fixtures/` path is a legitimate test double and MUST pass.
+- **Any escape is audit-approved, never implementer-self-annotated.** A bare
+  `// @genuine-constant` (or any inline suppression comment) is a `# noqa`-style
+  bypass and is **forbidden**. Overrides require an out-of-band audit approval, not
+  a source annotation.
+
+### 8.7. LLM boundaries (when the code calls an LLM)
 
 - **Model output is untrusted input** — apply §8.1 sink rules before it reaches
   shell, SQL, eval, HTML, or a path (OWASP LLM05).
 - **Authorization lives at the tool/action layer, never in prompt text**; no
   secrets in system prompts (OWASP LLM01/LLM02/LLM06).
 
-### 8.7. Sources (canonical primaries)
+### 8.8. Sources (canonical primaries)
 
 - **OWASP** — Top 10:2025 `owasp.org/Top10/2025/`; ASVS 5.0 L1; Cheat Sheet
   Series `cheatsheetseries.owasp.org`; LLM Top 10 (2025).
@@ -504,3 +544,37 @@ security audit (`.harness.yaml audit.security_surface`).
 - **NIST SSDF SP 800-218** (PW.4/5/7/8) `csrc.nist.gov/pubs/sp/800/218/final`.
 - **Veracode** *2025 GenAI Code Security Report*; **Spracklen et al.** USENIX
   Security 2025 (package hallucination) — the measured AI failure modes here.
+
+---
+
+## 9. Process — challenge gate discipline (advisory)
+
+These rules are **advisory prose**; they shape orchestrator and agent behaviour
+but are not mechanical gates. They are canonical here and inlined into every
+orchestrator prompt via `/autodrive`.
+
+### 9.1. Throughput-off-gate + floor-unit disclosure
+
+- **Challenge gates are not on the throughput budget.** The number of blind
+  rounds is fixed by the floor (`challenge.min_passes` / `complex_passes` when
+  the batch is `complexity: high`); the remaining turn budget does not reduce it.
+- **Security and launch gates escalate, never compress.** When a batch is
+  security- or launch-critical, running fewer rounds than the floor to save turns
+  is a defect, not an optimisation.
+- **Any intent to run below the floor halts immediately** and routes
+  `set-state --to needs-human` before any work proceeds on that task.
+- **Deviation reports use floor units, not softening adjectives.** State the
+  shortfall as "1 of required ≥2 rounds completed" — never "one thorough round"
+  or equivalent hedging language. Floor units are auditable; adjectives are not.
+- **Security/launch batches MUST carry `complexity: high`** in `BATCH.md`, so
+  the engine selects `complex_passes` and the floor is applied correctly.
+
+### 9.2. Adjudicator ≠ round-runner (warn-only)
+
+- The `challenge-adjudicate` step runs as its own **top-level step**, never
+  inline inside a round subagent.
+- The orchestrator records a self-declared round-runner vs adjudicator marker via
+  `gate-event`. There is **no strict mechanical block** — the ledger has no
+  subagent id, so enforcement is not deterministic.
+- The `warn` sweep surfaces a same-actor declaration as a non-blocking warning;
+  the gate still runs. This is **warn-only** (PRD-R43).
