@@ -292,8 +292,8 @@ Numeric and lint-testable (axe-core, Lighthouse, Playwright).
   `paragraph ≥ 2×`, `letter-spacing ≥ 0.12×`, `word-spacing ≥ 0.16×` font size.
 - **Focus not obscured (SC 2.4.11):** the focused component is never *entirely*
   hidden by author content (sticky headers, cookie bars).
-- **Focus appearance (SC 2.4.13):** focus ring perimeter `≥ 2 CSS px`, `≥ 3:1`
-  focused-vs-unfocused contrast.
+- **Focus appearance (SC 2.4.13, AAA — harness-elected bar, exceeds AA):** focus ring
+  perimeter `≥ 2 CSS px`, `≥ 3:1` focused-vs-unfocused contrast.
 - **Keyboard operable (SC 2.1.1):** every control reachable and operable by
   keyboard; focus always visible; tab order matches visual reading order.
 - **Semantic HTML / correct ARIA:** buttons are `<button>`, links are `<a>`, form
@@ -360,6 +360,15 @@ from primary by ≥ one control's width** so "OK" muscle memory can't fire
   OS system default — the UI has no concrete typeface. A UI must declare a
   concrete typeface system and actually load it. See `harness/ui-visual-language.md`
   for the approved typeface menu.
+- **UA-default heading** is a named defect: a heading element (`h1`–`h6`) rendered
+  at a UA-default size (e.g. browser-default `h1` at 32px) rather than a value from
+  the declared type scale. Bind every heading level to the scale via element
+  selectors, class selectors, or `@layer` rules — never rely on browser defaults.
+- **Unbound token layer** is a named defect: a design token (e.g. `--font-size-*`,
+  `--color-primary`) that is defined but consumed by no element or class selector.
+  Tokens must be bound, not merely defined. See `harness/ui-component-recipes.md`
+  for the binding contract and `harness/ui-visual-language.md` §4 for the size
+  constants gates cite.
 
 ### 7.7. Colour
 
@@ -380,6 +389,16 @@ from primary by ≥ one control's width** so "OK" muscle memory can't fire
   accents.
 - **Colour is never the only signal** for state — pair with icon, label, or
   position (SC 1.4.1).
+- **Inline-styled interactive** is a named defect: an interactive element (button,
+  input, link, or any control) whose *sole* styling is a static inline `style`
+  object. Inline objects cannot express `:hover`, `:focus-visible`, or `:active`
+  pseudo-class states. Style interactive elements via CSS classes, CSS Modules, or
+  CSS-in-JS with state support. See `harness/ui-component-recipes.md` §12 for the
+  required state list per primitive.
+- **Accent overrun** is a named defect: more than one filled-accent CTA per view
+  region, or more than four total accent-coloured elements (fills + accent-text links
+  + accent-bordered elements + active-nav tint) in a single view. See
+  `harness/ui-visual-language.md` §4.2 for the accent budget constants.
 
 ### 7.8. Component patterns
 
@@ -447,6 +466,25 @@ from primary by ≥ one control's width** so "OK" muscle memory can't fire
   Mixing grid sizes or stroke weights within one surface is a defect.
 - **See §7.9** for the accessibility rule that nav icons must also carry text
   labels unless universally recognised.
+
+### 7.12. Component recipes
+
+The single home for control anatomy is `harness/ui-component-recipes.md`. That
+doc prescribes heights, padding, radius, label size/weight, and required interaction
+states for each primitive (button, input, chip, nav row, list row, card, empty
+state, skeleton, header, auth card, link). Do not duplicate its anatomy numbers
+here — cite it by section.
+
+Four value-level defects (introduced in §7.6 and §7.7 above; named here for
+cross-reference):
+
+- **Unbound token layer** — a design token defined but bound by no selector (§7.6).
+- **Inline-styled interactive** — interactive element styled exclusively via a
+  static `style` object, incapable of pseudo-class states (§7.7).
+- **UA-default heading** — heading element rendered at a UA-default size rather
+  than the declared type scale (§7.6).
+- **Accent overrun** — filled-accent CTAs or total accent elements exceeding the
+  budget (§7.7; budget constants: `harness/ui-visual-language.md` §4.2).
 
 ---
 
