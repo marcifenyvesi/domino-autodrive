@@ -355,6 +355,11 @@ from primary by ≥ one control's width** so "OK" muscle memory can't fire
   across a wide viewport.
 - **Hierarchy via weight + colour, not size alone** (Refactoring UI).
 - **All-caps** needs `≥ 0.05em` letter-spacing; mixed-case doesn't.
+- **Declared-but-unloaded font is a defect.** A `font-family` declaration with no
+  corresponding `@font-face` rule or `<link>` to a font file silently renders the
+  OS system default — the UI has no concrete typeface. A UI must declare a
+  concrete typeface system and actually load it. See `harness/ui-visual-language.md`
+  for the approved typeface menu.
 
 ### 7.7. Colour
 
@@ -362,9 +367,14 @@ from primary by ≥ one control's width** so "OK" muscle memory can't fire
   lifeless UI.
 - **Semantic role tokens, not raw hex:** `surface`, `on-surface`, `primary`,
   `on-primary`, `secondary`, `error`, `on-error`, `border`, `focus-ring`
-  (Material 3's model).
+  (Material 3's model). State colors resolve to palette tokens — raw hex values
+  in component code are a defect.
 - **Two neutrals + one accent + semantic states** is enough; more needs a stated
   reason. `60/30/10` distribution is a rule of thumb, not law.
+- **Shipping the unmodified framework-default ramp as a palette is a defect.**
+  A UI must derive its own palette from a named source; using the framework's
+  out-of-the-box color ramp without modification produces unbranded, indistinct
+  output. See `harness/ui-visual-language.md` for the approved palette menu.
 - **Dark mode ≠ invert.** Never pure `#000` for surfaces — dark grey, higher
   surface = lighter (M2 `#121212` + elevation; M3 tonal ≈ `#141218`); desaturate
   accents.
@@ -395,7 +405,8 @@ from primary by ≥ one control's width** so "OK" muscle memory can't fire
 - **Whitespace over borders** — a card doesn't need a border if spacing already
   separates it (Refactoring UI: *emphasise by de-emphasising*).
 - **Icons in nav need text labels** unless universal (search/home/settings);
-  tooltips aren't labels.
+  tooltips aren't labels. (Icon-system rules — library selection, emoji prohibition,
+  grid — live in §7.11.)
 - **Tables for >4 attributes/row, lists for ≤2.** Cards are for browsing, not
   scanning columns.
 - **Disabled buttons must say *why*** — never the only feedback for validation.
@@ -419,6 +430,23 @@ from primary by ≥ one control's width** so "OK" muscle memory can't fire
   `m3.material.io/`.
 - **Refactoring UI** (Wathan/Schoger); **Baymard** — line length; **Bringhurst**
   — *Elements of Typographic Style*.
+
+### 7.11. Icon systems
+
+- **Icons must come from a named, maintained library.** Using an ad-hoc
+  collection of SVGs with no declared provenance, mixed grid sizes, or
+  inconsistent stroke widths is a defect. See `harness/ui-visual-language.md`
+  for the approved icon library menu.
+- **Emoji-as-icons is a defect.** Emoji render differently across OS versions and
+  platforms (Apple, Google, Microsoft, Samsung each ship their own glyphs); they
+  offer no stroke-width or color control, do not sit on a design grid, and scale
+  poorly. Using emoji in place of icons — in buttons, navigation, status
+  indicators, or any functional UI element — is a defect.
+- **24px grid, consistent stroke.** All icons in a surface must share the same
+  base grid (24px standard; 20px and 16px for dense contexts) and stroke width.
+  Mixing grid sizes or stroke weights within one surface is a defect.
+- **See §7.9** for the accessibility rule that nav icons must also carry text
+  labels unless universally recognised.
 
 ---
 
